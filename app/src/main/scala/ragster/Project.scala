@@ -1,5 +1,8 @@
-//> using scala 3.6.2
+//> using scala 3.6.3
+//> using resourceDir ../../resources
+
 //> using toolkit typelevel:0.1.29
+
 //> using dep org.typelevel::kittens::3.4.0
 //> using dep org.typelevel::log4cats-slf4j:2.7.0
 
@@ -10,6 +13,9 @@
 //> using dep org.http4s::http4s-ember-server::0.23.29
 //> using dep org.http4s::http4s-scalatags::0.25.2
 
+//> using dep org.tpolecat::skunk-core::1.0.0-M10
+//> using dep dev.rolang::dumbo::0.5.5
+
 //> using dep com.lihaoyi::scalatags::0.13.1
 
 //> using dep com.softwaremill.sttp.openai::fs2:0.2.5
@@ -18,8 +24,6 @@
 //> using dep com.softwaremill.sttp.client4::jsoniter:4.0.0-M19
 
 //> using dep io.scalaland::chimney::1.5.0
-
-//> using dep com.github.haifengl::smile-scala:3.1.1
 
 //> using dep dev.langchain4j:langchain4j:0.36.2
 //> using dep dev.langchain4j:langchain4j-document-parser-apache-tika:0.36.2

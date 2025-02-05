@@ -4,7 +4,7 @@ app-dev:
     export ENV=Local
     (
         trap 'kill 0' SIGINT; 
-        scala-cli run . --restart --main-class ragster.ragster & 
+        scala-cli run . --restart --main-class ragster.Ragster & 
         npm run tailwind:watch --workspace app &
         npm run esbuild:watch --workspace app
     )
