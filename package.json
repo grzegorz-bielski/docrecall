@@ -1,0 +1,11 @@
+{
+    "name": "ragster",
+    "description": "",
+    "main": "",
+    "workspaces":[
+      "app"
+    ],
+    "author": "",
+    "license": "APL-1.0"
+  }
+  
