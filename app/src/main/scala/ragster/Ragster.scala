@@ -11,7 +11,7 @@ import ragster.rag.*
 import ragster.rag.ingestion.*
 import ragster.rag.vectorstore.*
 import ragster.home.*
-import ragster.clickhouse.*
+import ragster.postgres.*
 import ragster.chat.*
 import ragster.integrations.slack.*
 import ragster.inference.*
@@ -24,10 +24,10 @@ object Ragster extends ResourceApp.Forever:
       given Logger[IO]  <- Slf4jLogger.create[IO].toResource
       given SttpBackend <- SttpBackend.resource
 
-      given ClickHouseClient[IO]       = SttpClickHouseClient.of
-      given ContextRepository[IO]     <- ClickHouseContextRepository.of.toResource
-      given DocumentRepository[IO]    <- ClickHouseDocumentRepository.of.toResource
-      given VectorStoreRepository[IO] <- ClickHouseVectorStore.of.toResource
+      given PostgresClient[IO]        <- PostgresClient.of
+      given ContextRepository[IO]     <- PostgresContextRepository.of.toResource
+      given DocumentRepository[IO]    <- PostgresDocumentRepository.of.toResource
+      given VectorStoreRepository[IO] <- PostgresVectorStore.of.toResource
 
       inferenceModule                 = InferenceModule.of
       given ChatCompletionService[IO] = inferenceModule.chatCompletionService
@@ -43,30 +43,31 @@ object Ragster extends ResourceApp.Forever:
       given SlackCommandsService[IO] <- SlackCommandsService.of
       slackBotController            <- SlackBotController.of
 
-      _ <- runInitialHealthChecks().toResource
+      // _ <- runInitialHealthChecks().toResource
 
       // state-changing side effects (!)
-      _ <- ClickHouseMigrator.migrate().toResource
-      _ <- Fixtures.loadFixtures().toResource
+      // _ <- ClickHouseMigrator.migrate().toResource
+      // _ <- Fixtures.loadFixtures().toResource
+      _ <- ragster.Migrations.run.toResource
 
-      _ <- httpApp(
-             controllers = Vector(
-               contextController,
-               homeController,
-               slackBotController,
-             ),
-           )
+      // _ <- httpApp(
+      //        controllers = Vector(
+      //          contextController,
+      //          homeController,
+      //          slackBotController,
+      //        ),
+      //      )
     yield ()
 
-  private def runInitialHealthChecks()(using clickHouseClient: ClickHouseClient[IO], logger: Logger[IO]) =
-    val healthChecks = Vector(
-      "ClickHouse" -> clickHouseClient.healthCheck,
-    )
+  // private def runInitialHealthChecks()(using clickHouseClient: ClickHouseClient[IO], logger: Logger[IO]) =
+  //   val healthChecks = Vector(
+  //     "ClickHouse" -> clickHouseClient.healthCheck,
+  //   )
 
-    healthChecks
-      .traverse: (name, check) =>
-        check.attempt.flatMap:
-          case Right(_) => info"$name is healthy"
-          case Left(e)  =>
-            logger.error(e)(s"$name is unhealthy, check your connection. Stopping the app") *> IO.raiseError(e)
-      .void
+  //   healthChecks
+  //     .traverse: (name, check) =>
+  //       check.attempt.flatMap:
+  //         case Right(_) => info"$name is healthy"
+  //         case Left(e)  =>
+  //           logger.error(e)(s"$name is unhealthy, check your connection. Stopping the app") *> IO.raiseError(e)
+  //     .void

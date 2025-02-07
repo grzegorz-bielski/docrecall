@@ -15,7 +15,7 @@ final case class AppConfig(
   loadFixtures: Boolean,
   maxEntitySizeInBytes: Long,
   inferenceEngine: InferenceEngine,
-  clickhouse: ClickhouseConfig,
+  postgres: PostgresConfig,
   slack: SlackBotConfig,
 ):
   def isDev = env == EnvType.Local
@@ -40,12 +40,13 @@ object AppConfig:
       inferenceEngine = InferenceEngine.OpenAIOllama(
         url = "http://localhost:11434/v1",
       ),
-      clickhouse = ClickhouseConfig(
-        url = "http://localhost:8123",
+      postgres = PostgresConfig(
+        host = "http://localhost",
+        port = 5432,
         username = "default",
         password = "default",
         database = "default",
-        resetOnStart = true,
+        maxConcurrentSessions = 10,
       ),
       slack = SlackBotConfig(
         signingSecret = slackSigningSecret,
@@ -64,12 +65,13 @@ enum InferenceEngine:
     url: String,
   )
 
-final case class ClickhouseConfig(
-  url: String,
+final case class PostgresConfig(
+  host: String,
+  port: Int,
   username: String,
   password: String,
   database: String,
-  resetOnStart: Boolean,
+  maxConcurrentSessions: Int,
 )
 
 final case class SlackBotConfig(
