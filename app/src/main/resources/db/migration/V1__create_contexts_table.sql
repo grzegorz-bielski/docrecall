@@ -6,8 +6,8 @@ CREATE TABLE IF NOT EXISTS contexts
     prompt_template JSONB, -- a JSONB object of the prompt template
     retrieval_settings JSONB, -- a JSONB object of the retrieval settings
     chat_completion_settings JSONB, -- a JSONB object of the chat completion settings
-    chat_model TEXT, -- name of the chat model
-    embeddings_model TEXT, -- name of the embeddings model
+    chat_model JSONB, -- name of the chat model
+    embeddings_model JSONB, -- name of the embeddings model
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- default to the current timestamp
 );
 

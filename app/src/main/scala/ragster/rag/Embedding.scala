@@ -22,7 +22,9 @@ object Embedding:
     documentId: DocumentId,
     contextId: ContextId,
     fragmentIndex: Long,
-    score: Double,
+    semanticRank: Double,
+    fullTextRank: Double,
+    rrfRank: Double,
   ):
     override def toString: String = 
       i"""
@@ -32,7 +34,9 @@ object Embedding:
         documentId: $documentId, 
         contextId: $contextId, 
         fragmentIndex: $fragmentIndex, 
-        score: $score)
+        semanticRank: $semanticRank,
+        fullTextRank: $fullTextRank,
+        rrfRank: $rrfRank
       """"
 
   /** Embedding from the user query

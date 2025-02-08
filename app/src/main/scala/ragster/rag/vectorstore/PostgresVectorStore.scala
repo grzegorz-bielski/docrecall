@@ -4,7 +4,7 @@ package vectorstore
 
 import cats.effect.*
 import cats.syntax.all.*
-import fs2.{Chunk as _, *}
+import fs2.{Chunk as _, text as _, *}
 import com.github.plokhotnyuk.jsoniter_scala.core.*
 import com.github.plokhotnyuk.jsoniter_scala.macros.*
 import org.typelevel.log4cats.*
@@ -12,87 +12,65 @@ import org.typelevel.log4cats.slf4j.*
 import org.typelevel.log4cats.syntax.*
 import unindent.*
 import java.util.UUID
+import skunk.*
+import skunk.data.*
+import skunk.codec.all.*
+import skunk.syntax.all.*
 
 import ragster.postgres.*
-import skunk.*
-
-final class PostgresVectorStore(client: PostgresClient[IO])(using Logger[IO]) extends VectorStoreRepository[IO]:
+final class PostgresVectorStore(sessionResource: SessionResource)(using Logger[IO]) extends VectorStoreRepository[IO]:
   import PostgresVectorStore.*
 
   def delete(contextId: ContextId, documentId: DocumentId): IO[Unit] =
-    ???
-    // client
-    //   .executeQuery:
-    //     i"""
-    //     DELETE FROM embeddings
-    //     WHERE
-    //       context_id = toUUID('$contextId') AND
-    //       document_id = toUUID('$documentId')
-    //     """
-    //   .void
+    sessionResource.use:
+      _.prepare:
+        sql"""
+        DELETE FROM embeddings
+        WHERE
+          context_id = ${ContextId.pgCodec} AND
+          document_id = ${DocumentId.pgCodec}
+        """.command
+      .flatMap(_.execute((contextId, documentId)))
+        .void
 
   def store(index: Vector[Embedding.Index]): IO[Unit] =
-    ???
-    // index.headOption
-    //   .traverse: embedding =>
-    //     // TODO: maybe this should not be a part of the store method
-    //     documentEmbeddingsExists(embedding.contextId, embedding.documentId).ifM(
-    //       info"Embeddings for document ${embedding.documentId} already exists. Skipping the insertion.",
-    //       storeEmbeddings(index),
-    //     )
-    //   .void
+    val values = index.toList.map: e =>
+      (e.contextId, e.documentId, e.fragmentIndex, e.chunk.index, e.chunk.text, e.chunk.metadata, Arr(e.value*))
 
-  private def storeEmbeddings(embeddings: Vector[Embedding.Index]): IO[Unit] =
-    ???
-    // val values = embeddings
-    //   .map: embedding =>
-    //     import embedding.*
-
-    //     val metadata        = chunk.metadata.toClickHouseMap
-    //     val embeddings      = s"[${value.mkString(", ")}]"
-    //     val embeddingsValue = chunk.text.toClickHouseString
-
-    //     s"(toUUID('$contextId'), toUUID('$documentId'), $fragmentIndex, ${chunk.index}, $embeddingsValue, $metadata, $embeddings)"
-    //   .mkString(",\n")
-
-    // val insertQuery =
-    //   i"""
-    //   INSERT INTO embeddings (context_id, document_id, fragment_index, chunk_index, value, metadata, embedding) VALUES
-    //   ${values}
-    //   """
-
-    // client.executeQuery(insertQuery) *>
-    //   info"Stored ${embeddings.size} embeddings."
+    sessionResource.use:
+      _.prepare:
+        sql"""
+        INSERT INTO embeddings (context_id, document_id, fragment_index, chunk_index, value, metadata, embedding)
+        VALUES ${embeddingToStoreCodec.values.list(values)}
+        """.command
+      .flatMap(_.execute(values))
+        .void
 
   def documentEmbeddingsExists(contextId: ContextId, documentId: DocumentId): IO[Boolean] =
-    // client
-    //   .streamQueryTextLines:
-    //     i"""
-    //     SELECT
-    //      EXISTS(
-    //       SELECT document_id 
-    //       FROM embeddings 
-    //       WHERE 
-    //         context_id = toUUID('$contextId') AND 
-    //         document_id = toUUID('$documentId') 
-    //       LIMIT 1
-    //      )
-    //     """.stripMargin
-    //   .compile
-    //   .string
-    //   .map(_.trim.toInt)
-    //   .map(_ == 1)
-    //   .flatMap: value =>
-    //     info"Document $documentId embedding exists: $value".as(value)
-    ???
+    sessionResource.use:
+      _.prepare:
+        sql"""
+        SELECT
+         EXISTS(
+          SELECT document_id
+          FROM embeddings
+          WHERE
+            context_id = ${ContextId.pgCodec} AND
+            document_id = ${DocumentId.pgCodec}
+          LIMIT 1
+         )
+        """.query(bool)
+      .flatMap(_.unique((contextId, documentId)))
 
   def retrieve(embedding: Embedding.Query, settings: RetrievalSettings): Stream[IO, Embedding.Retrieved] =
+    // TODO: https://docs.paradedb.com/documentation/guides/hybrid
+    
     // client
     //   .streamQueryJson[ClickHouseRetrievedRow]:
     //     i"""
     //       WITH matched_embeddings AS (
     //         SELECT * FROM (
-    //           SELECT 
+    //           SELECT
     //             document_id,
     //             context_id,
     //             fragment_index AS matched_fragment_index,
@@ -104,10 +82,10 @@ final class PostgresVectorStore(client: PostgresClient[IO])(using Logger[IO]) ex
     //           WHERE context_id = toUUID('${embedding.contextId}')
     //           ORDER BY score ASC
     //           LIMIT ${settings.topK}
-    //         ) 
+    //         )
     //         LIMIT 1 BY document_id, matched_fragment_index
     //       )
-    //       SELECT 
+    //       SELECT
     //         document_id,
     //         context_id,
     //         ae.fragment_index as fragment_index,
@@ -119,12 +97,12 @@ final class PostgresVectorStore(client: PostgresClient[IO])(using Logger[IO]) ex
     //         score
     //       FROM matched_embeddings AS e
     //       INNER JOIN embeddings AS ae
-    //       ON 
-    //         ae.context_id = e.context_id AND 
+    //       ON
+    //         ae.context_id = e.context_id AND
     //         ae.document_id = e.document_id
     //       WHERE
-    //         fragment_index BETWEEN 
-    //         matched_fragment_index - ${settings.fragmentLookupRange.lookBack} AND 
+    //         fragment_index BETWEEN
+    //         matched_fragment_index - ${settings.fragmentLookupRange.lookBack} AND
     //         matched_fragment_index + ${settings.fragmentLookupRange.lookAhead}
     //       ORDER BY toUInt128(document_id), fragment_index, chunk_index
     //       LIMIT 1 BY document_id, fragment_index
@@ -143,16 +121,21 @@ final class PostgresVectorStore(client: PostgresClient[IO])(using Logger[IO]) ex
     ???
 
 object PostgresVectorStore:
-  def of(using client: PostgresClient[IO]): IO[PostgresVectorStore] =
+  def of(using sessionResource: SessionResource): IO[PostgresVectorStore] =
     for given Logger[IO] <- Slf4jLogger.create[IO]
-    yield PostgresVectorStore(client)
+    yield PostgresVectorStore(sessionResource)
 
-  // private final case class PostgresRetrievedRow(
-  //   document_id: UUID,
-  //   context_id: UUID,
-  //   fragment_index: Long,
-  //   chunk_index: Long,
-  //   value: String,
-  //   metadata: Map[String, String],
-  //   score: Double,
-  // ) derives ConfiguredJsonValueCodec
+  private lazy val embeddingToStoreCodec =
+    ContextId.pgCodec *:
+      DocumentId.pgCodec *:
+      int8 *:
+      int8 *:
+      text *:
+      Metadata.pgCodec *:
+      _float4
+
+  private lazy val storedEmbeddingCodec =
+    embeddingToStoreCodec *:
+      float8 *:
+      float8 *:
+      float8

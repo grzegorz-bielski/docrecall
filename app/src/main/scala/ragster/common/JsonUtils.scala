@@ -6,8 +6,11 @@ import java.nio.charset.StandardCharsets
 import scala.util.Try
 
 extension [T](underlying: T)
+  def asJsonUnsafe(indentStep: Int = 0)(using codec: JsonValueCodec[T]): String = 
+   writeToString(underlying, WriterConfig.withIndentionStep(indentStep))
+
   def asJson(indentStep: Int = 0)(using codec: JsonValueCodec[T]): Either[String, String] =
-    Try(writeToString(underlying, WriterConfig.withIndentionStep(indentStep))).toEither.left.map(_.getMessage)
+    Try(asJsonUnsafe(indentStep)).toEither.left.map(_.getMessage)
 
 extension (underlying: String)
   def unsafeParseToJson[T](using codec: JsonValueCodec[T]): T =

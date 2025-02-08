@@ -53,7 +53,7 @@ final class ClickHouseIngestionService(using
                        description = "",
                        version = documentVersion,
                        `type` = "PDF", // TODO: infer from content...
-                       metadata = Map.empty,
+                       metadata = Metadata.empty,
                      )
       document     = Document.Ingested(
                        info = documentInfo,

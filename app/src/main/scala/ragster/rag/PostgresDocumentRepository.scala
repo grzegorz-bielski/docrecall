@@ -13,100 +13,91 @@ import unindent.*
 import java.util.UUID
 import java.time.*
 import io.scalaland.chimney.dsl.*
-
-import ragster.postgres.*
 import skunk.*
+import skunk.codec.all.*
+import skunk.syntax.all.*
+
+import ragster.common.SkunkJson.*
+import ragster.postgres.*
 
 import PostgresDocumentRepository.*
 
-final class PostgresDocumentRepository(client: PostgresClient[IO])(using Logger[IO]) extends DocumentRepository[IO]:
+final class PostgresDocumentRepository(sessionResource: SessionResource)(using Logger[IO]) extends DocumentRepository[IO]:
+  private lazy val selectDocumentFragment =
+    sql"""
+    SELECT
+      id, 
+      context_id, 
+      name, 
+      description, 
+      version, 
+      type,
+      metadata
+    FROM documents
+    """
+
   def getAll(contextId: ContextId): IO[Vector[Document.Info]] =
-    // client
-    //   .streamQueryJson[IngestedDocumentRow]:
-    //     i"""
-    //     SELECT 
-    //       id, 
-    //       context_id, 
-    //       name, 
-    //       description, 
-    //       version, 
-    //       type,
-    //       metadata
-    //     FROM documents
-    //     WHERE context_id = toUUID('$contextId') 
-    //     FORMAT JSONEachRow
-    //     """
-    //   .map(_.asDocumentInfo)
-    //   .compile
-    //   .toVector
-    ???
+    sessionResource.use:
+      _.execute:
+        selectDocumentFragment.query(documentInfoCodec)
+      .map(_.toVector)
 
   def get(contextId: ContextId, name: DocumentName): IO[Option[Document.Info]] =
-    // client
-    //   .streamQueryJson[IngestedDocumentRow]:
-    //     i"""
-    //     SELECT 
-    //       id, 
-    //       context_id, 
-    //       name, 
-    //       description, 
-    //       version, 
-    //       type,
-    //       metadata
-    //     FROM documents
-    //     WHERE context_id = toUUID('$contextId') 
-    //     AND name = '$name'
-    //     FORMAT JSONEachRow
-    //     """
-    //   .map(_.asDocumentInfo)
-    //   .compile
-    //   .last
-    ???
+    sessionResource.use:
+      _.prepare:
+        sql"""
+        $selectDocumentFragment
+        WHERE context_id = ${ContextId.pgCodec}
+        AND name = $text
+        """
+        .query(documentInfoCodec)
+      .flatMap(_.option((contextId, name)))
 
-  override def createOrUpdate(document: Document.Info): IO[Unit] =
-    // should be merged by ReplacingMergeTree on sorting key duplicates, but not at once
-    // client.executeQuery:
-    //   i"""
-    //   INSERT INTO documents (
-    //     id, 
-    //     context_id, 
-    //     name, 
-    //     description, 
-    //     version, 
-    //     type,
-    //     metadata
-    //   ) VALUES (
-    //     toUUID('${document.id}'),
-    //     toUUID('${document.contextId}'),
-    //     '${document.name}',
-    //     '${document.description}',
-    //     ${document.version},
-    //     '${document.`type`}',
-    //     ${document.metadata.toClickHouseMap}
-    //   )
-    //   """
-    ???
+  def createOrUpdate(document: Document.Info): IO[Unit] =
+    sessionResource
+      .use:
+        _.prepare:
+          sql"""
+          INSERT INTO documents (
+            id,
+            context_id,
+            name,
+            description,
+            version,
+            type,
+            metadata
+          ) VALUES ($documentInfoCodec),
+           ON CONFLICT (id) DO UPDATE SET
+              description = EXCLUDED.description,
+              version = EXCLUDED.version,
+              type = EXCLUDED.type,
+              metadata = EXCLUDED.metadata
+          """
+          .command
+        .flatMap(_.execute(document))
+      .void
 
-  override def delete(id: DocumentId): IO[Unit] =
-    ???
-    // client.executeQuery:
-    //   i"""DELETE FROM documents WHERE id = toUUID('$id')"""
+  def delete(id: DocumentId): IO[Unit] =
+    sessionResource
+      .use:
+        _.prepare:
+          sql"""DELETE FROM contexts WHERE id = ${DocumentId.pgCodec}""".command
+        .flatMap(_.execute(id))
+      .void
 
 object PostgresDocumentRepository:
-  def of(using client: PostgresClient[IO]): IO[PostgresDocumentRepository] =
+  def of(using sessionResource: SessionResource): IO[PostgresDocumentRepository] =
     for given Logger[IO] <- Slf4jLogger.create[IO]
-    yield PostgresDocumentRepository(client)
+    yield PostgresDocumentRepository(sessionResource)
 
-  // private final case class IngestedDocumentRow(
-  //   id: DocumentId,
-  //   context_id: ContextId,
-  //   name: DocumentName,
-  //   version: DocumentVersion,
-  //   description: String,
-  //   `type`: String,
-  //   metadata: Map[String, String],
-  // ) derives ConfiguredJsonValueCodec:
-  //   def asDocumentInfo: Document.Info =
-  //     this.into[Document.Info]
-  //       .withFieldRenamed(_.context_id, _.contextId)
-  //       .transform
+
+  private lazy val documentInfoCodec: Codec[Document.Info] =
+    (
+      DocumentId.pgCodec *:
+        ContextId.pgCodec *:
+        DocumentName.pgCodec *:
+        DocumentVersion.pgCodec *:
+        text *:
+        text *:
+        Metadata.pgCodec
+    ).to[Document.Info]

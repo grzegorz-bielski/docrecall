@@ -41,11 +41,11 @@ object AppConfig:
         url = "http://localhost:11434/v1",
       ),
       postgres = PostgresConfig(
-        host = "http://localhost",
+        host = "localhost",
         port = 5432,
-        username = "default",
-        password = "default",
-        database = "default",
+        username = "user",
+        password = "password",
+        database = "ragster",
         maxConcurrentSessions = 10,
       ),
       slack = SlackBotConfig(

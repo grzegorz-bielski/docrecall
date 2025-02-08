@@ -11,9 +11,13 @@ CREATE TABLE IF NOT EXISTS embeddings
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX full_text_idx ON embeddings
+CREATE INDEX idx_embeddings_context_document_id ON embeddings(context_id, document_id);
+
+CREATE INDEX idx_full_text ON embeddings
 USING bm25 (id, value)
 WITH (key_field='id');
 
+-- TODO: check binary quantization
+-- https://github.com/pgvector/pgvector?tab=readme-ov-file#binary-quantization
 CREATE INDEX ON embeddings
 USING hnsw (embedding vector_cosine_ops);

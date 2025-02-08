@@ -6,6 +6,8 @@ import cats.syntax.all.*
 import com.github.plokhotnyuk.jsoniter_scala.core.*
 import com.github.plokhotnyuk.jsoniter_scala.macros.*
 import unindent.*
+import skunk.codec.all.*
+import skunk.*
 
 opaque type ContextId = UUID
 object ContextId:
@@ -13,6 +15,7 @@ object ContextId:
   def of: IO[ContextId]                   = IO.randomUUID
 
   given JsonValueCodec[ContextId] = JsonCodecMaker.make
+  given pgCodec: Codec[ContextId]   = uuid
 
 /** A prompt template.
   *

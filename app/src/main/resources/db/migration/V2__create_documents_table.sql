@@ -8,3 +8,5 @@ CREATE TABLE IF NOT EXISTS documents (
     metadata JSONB, -- any additional metadata of the document
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- default to the current timestamp
 );
+
+CREATE INDEX idx_documents_context_id ON documents(context_id);

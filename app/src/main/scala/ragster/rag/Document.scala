@@ -1,6 +1,9 @@
 package ragster
 package rag
 
+import com.github.plokhotnyuk.jsoniter_scala.core.*
+import com.github.plokhotnyuk.jsoniter_scala.macros.*
+
 object Document:
   final case class Ingested(
     info: Info,
@@ -14,7 +17,7 @@ object Document:
     version: DocumentVersion,
     description: String,
     `type`: String,
-    metadata: Map[String, String],
+    metadata: Metadata,
   )
 
   final case class Fragment(

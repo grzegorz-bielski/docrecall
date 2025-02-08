@@ -6,6 +6,7 @@ import cats.effect.*
 import org.typelevel.log4cats.*
 import org.typelevel.log4cats.slf4j.*
 import org.typelevel.log4cats.syntax.*
+import skunk.*
 
 import ragster.rag.*
 import ragster.rag.ingestion.*
@@ -24,7 +25,7 @@ object Ragster extends ResourceApp.Forever:
       given Logger[IO]  <- Slf4jLogger.create[IO].toResource
       given SttpBackend <- SttpBackend.resource
 
-      given PostgresClient[IO]        <- PostgresClient.of
+      given SessionResource           <- PostgresSessionPool.of
       given ContextRepository[IO]     <- PostgresContextRepository.of.toResource
       given DocumentRepository[IO]    <- PostgresDocumentRepository.of.toResource
       given VectorStoreRepository[IO] <- PostgresVectorStore.of.toResource
@@ -41,7 +42,9 @@ object Ragster extends ResourceApp.Forever:
 
       // integrations
       given SlackCommandsService[IO] <- SlackCommandsService.of
-      slackBotController            <- SlackBotController.of
+      slackBotController             <- SlackBotController.of
+
+      _ <- summon[ContextRepository[IO]].get(ContextId(java.util.UUID.randomUUID())).toResource
 
       // _ <- runInitialHealthChecks().toResource
 
@@ -50,13 +53,13 @@ object Ragster extends ResourceApp.Forever:
       // _ <- Fixtures.loadFixtures().toResource
       _ <- ragster.Migrations.run.toResource
 
-      // _ <- httpApp(
-      //        controllers = Vector(
-      //          contextController,
-      //          homeController,
-      //          slackBotController,
-      //        ),
-      //      )
+    // _ <- httpApp(
+    //        controllers = Vector(
+    //          contextController,
+    //          homeController,
+    //          slackBotController,
+    //        ),
+    //      )
     yield ()
 
   // private def runInitialHealthChecks()(using clickHouseClient: ClickHouseClient[IO], logger: Logger[IO]) =

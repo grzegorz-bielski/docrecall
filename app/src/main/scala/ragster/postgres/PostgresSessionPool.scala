@@ -6,11 +6,10 @@ import cats.syntax.all.*
 import skunk.*
 import org.typelevel.otel4s.trace.Tracer.Implicits.noop
 
-trait PostgresClient[F[_]]:
-  def withSession[A](fn: Session[F] => F[A]): F[A]
+type SessionResource = Resource[IO, Session[IO]]
 
-object PostgresClient:
-  def of(using appConfig: AppConfig): Resource[IO, PostgresClient[IO]] =
+object PostgresSessionPool:
+  def of(using appConfig: AppConfig): SessionPool[IO] =
     val config = appConfig.postgres
 
     Session
@@ -22,7 +21,3 @@ object PostgresClient:
         database = config.database,
         max = config.maxConcurrentSessions,
       )
-      .map: poolResource => 
-       new PostgresClient[IO]:
-          def withSession[A](fn: Session[IO] => IO[A]): IO[A] = 
-            poolResource.use(fn)

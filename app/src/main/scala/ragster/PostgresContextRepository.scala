@@ -11,13 +11,14 @@ import org.typelevel.log4cats.syntax.*
 import unindent.*
 import java.util.UUID
 import java.time.*
-import io.scalaland.chimney.dsl.*
-import io.scalaland.chimney.*
+import ragster.common.SkunkJson.*
 import scala.util.Try
 import scala.util.control.NoStackTrace
+import skunk.*
+import skunk.codec.all.*
+import skunk.syntax.all.*
 
 import ragster.postgres.*
-import skunk.*
 
 import PostgresContextRepository.*
 import ContextInfo.given
@@ -29,130 +30,99 @@ trait ContextRepository[F[_]]:
   def getByName(name: String): F[Vector[ContextInfo]]
   def delete(id: ContextId): F[Unit]
 
-final class PostgresContextRepository(client: PostgresClient[IO])(using Logger[IO]) extends ContextRepository[IO]:
-  // private lazy val selectContextFragment =
-  //   i"""
-  //   SELECT 
-  //     id, 
-  //     name, 
-  //     description, 
-  //     prompt_template,
-  //     retrieval_settings,
-  //     chat_completion_settings,
-  //     chat_model,
-  //     embeddings_model,
-  //     updated_at
-  //   FROM contexts
-  //   """
+final class PostgresContextRepository(sessionResource: SessionResource)(using Logger[IO]) extends ContextRepository[IO]:
+  private lazy val selectContextFragment =
+    sql"""
+    SELECT
+      id,
+      name,
+      description,
+      prompt_template,
+      retrieval_settings,
+      chat_completion_settings,
+      chat_model,
+      embeddings_model,
+      updated_at
+    FROM contexts
+    """
 
   def get(id: ContextId): IO[Option[ContextInfo]] =
-    ???
-    // client
-    //   .streamQueryJson[ContextInfoRetrievedRow]:
-    //     i"""
-    //     $selectContextFragment 
-    //     WHERE id = toUUID('$id')
-    //     ORDER BY updated_at DESC
-    //     LIMIT 1
-    //     FORMAT JSONEachRow
-    //     """
-    //   .evalMap: row =>
-    //     IO.fromEither(row.asContextInfo)
-    //   .compile
-    //   .last
+    sessionResource.use:
+      _.prepare:
+        sql"""
+          $selectContextFragment
+          WHERE id = ${ContextId.pgCodec}
+          """
+          .query(contextInfoCodec)
+      .flatMap(_.option(id))
 
-  // leverages the `context_name_projection`
   // `name` is not unique (!)
-  def getByName(name: String): IO[Vector[ContextInfo]] = 
-    ???
-    // client
-    //   .streamQueryJson[ContextInfoRetrievedRow]:
-    //     i"""
-    //     $selectContextFragment
-    //     WHERE name = '$name'
-    //     ORDER BY id, updated_at DESC
-    //     LIMIT 1 BY id
-    //     FORMAT JSONEachRow
-    //     """
-    //   .evalMap: row =>
-    //     IO.fromEither(row.asContextInfo)
-    //   .compile
-    //   .toVector
+  def getByName(name: String): IO[Vector[ContextInfo]] =
+    sessionResource.use:
+      _.prepare:
+        sql"""
+          $selectContextFragment
+          WHERE name = $text
+          """
+          .query(contextInfoCodec)
+      .flatMap:
+        _.stream(name, chunkSize = 32).compile.toVector
 
   def getAll: IO[Vector[ContextInfo]] =
-    ???
-    // client
-    //   .streamQueryJson[ContextInfoRetrievedRow]:
-    //     i"""
-    //     $selectContextFragment
-    //     ORDER BY toUInt128(id), updated_at DESC
-    //     LIMIT 1 BY id
-    //     FORMAT JSONEachRow
-    //     """
-    //   .evalMap: row =>
-    //     IO.fromEither(row.asContextInfo)
-    //   .compile
-    //   .toVector
+    sessionResource.use:
+      _.execute:
+        selectContextFragment.query(contextInfoCodec)
+      .map(_.toVector)
 
-  override def createOrUpdate(info: ContextInfo): IO[Unit] =
-    ???
-    // val writerConfig = WriterConfig.withEscapeUnicode(true)
+  def createOrUpdate(info: ContextInfo): IO[Unit] =
+    sessionResource.use:
+      _.prepare:
+        sql"""
+          INSERT INTO contexts (
+            id,
+            name,
+            description,
+            prompt_template,
+            retrieval_settings,
+            chat_completion_settings,
+            chat_model,
+            embeddings_model
+          )
+          VALUES ($contextInfoCodec)
+          ON CONFLICT (id) DO UPDATE SET
+            name = EXCLUDED.name,
+            description = EXCLUDED.description,
+            prompt_template = EXCLUDED.prompt_template,
+            retrieval_settings = EXCLUDED.retrieval_settings,
+            chat_completion_settings = EXCLUDED.chat_completion_settings,
+            chat_model = EXCLUDED.chat_model,
+            embeddings_model = EXCLUDED.embeddings_model,
+            updated_at = CURRENT_TIMESTAMP
+        """.command
+      .flatMap(_.execute(info))
+      .void
 
-    // // should be merged by ReplacingMergeTree on sorting key duplicates, but not at once
-    // client.executeQuery:
-    //   i"""
-    //   INSERT INTO contexts (
-    //     id,
-    //     name, 
-    //     description, 
-    //     prompt_template,
-    //     retrieval_settings,
-    //     chat_completion_settings,
-    //     chat_model,
-    //     embeddings_model
-    //   ) 
-    //   VALUES (
-    //     toUUID(${info.id.toString.toClickHouseString}),
-    //     ${info.name.toClickHouseString},
-    //     ${info.description.toClickHouseString}, 
-    //     ${writeToString(info.promptTemplate, writerConfig).toClickHouseString},
-    //     ${writeToString(info.retrievalSettings, writerConfig).toClickHouseString},
-    //     ${writeToString(info.chatCompletionSettings, writerConfig).toClickHouseString},
-    //     ${writeToString(info.chatModel, writerConfig).toClickHouseString},
-    //     ${writeToString(info.embeddingsModel, writerConfig).toClickHouseString}
-    //   )
-    //   """
-      // TODO: do not stringify the values, encode to String, or use new JSON type
-  override def delete(id: ContextId): IO[Unit]             =
-    ???
-    // client.executeQuery:
-    //   i"""DELETE FROM contexts WHERE id = toUUID('$id')"""
+  def delete(id: ContextId): IO[Unit] =
+    sessionResource
+      .use:
+        _.prepare:
+          sql"""DELETE FROM contexts WHERE id = ${ContextId.pgCodec}""".command
+        .flatMap(_.execute(id))
+      .void
 
 object PostgresContextRepository:
-  def of(using client: PostgresClient[IO]): IO[PostgresContextRepository] =
+  def of(using sessionResource: SessionResource): IO[ContextRepository[IO]] =
     for given Logger[IO] <- Slf4jLogger.create[IO]
-    yield PostgresContextRepository(client)
+    yield PostgresContextRepository(sessionResource)
 
-  // inline given CodecMakerConfig =
-  //   CodecMakerConfig.withFieldNameMapper(JsonCodecMaker.enforce_snake_case)
-
-  // private final case class ContextInfoRetrievedRow(
-  //   id: ContextId,
-  //   name: String,
-  //   description: String,
-  //   promptTemplate: String,
-  //   retrievalSettings: String,
-  //   chatCompletionSettings: String,
-  //   chatModel: String,
-  //   embeddingsModel: String,
-  // ) derives ConfiguredJsonValueCodec:
-  //   def asContextInfo: Either[Throwable, ContextInfo] =
-  //     this
-  //       .intoPartial[ContextInfo]
-  //       .transform
-  //       .asEitherErrorPathMessageStrings
-  //       .leftMap: errors =>
-  //         ContextRetrievalError(errors.mkString(", "))
-
-  // final class ContextRetrievalError(msg: String) extends NoStackTrace:
-  //   override def getMessage: String = msg
+  private lazy val contextInfoCodec: Codec[ContextInfo] =
+    (
+      ContextId.pgCodec *:
+        text *:
+        text *:
+        jsonb[PromptTemplate] *:
+        jsonb[RetrievalSettings] *:
+        jsonb[ChatCompletionSettings] *:
+        jsonb[Model] *:
+        jsonb[Model]
+    ).to[ContextInfo]
