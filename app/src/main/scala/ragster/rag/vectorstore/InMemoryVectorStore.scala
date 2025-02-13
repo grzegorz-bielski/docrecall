@@ -30,7 +30,7 @@ final class InMemoryVectorStore(ref: Ref[IO, Vector[Embedding.Index]]) extends V
           (neighbor, score)  <- findKNearestNeighbors(
                                   data = index.map(embedding => (embedding.value.map(_.toDouble), embedding)),
                                   input = query.value.map(_.toDouble),
-                                  k = settings.topK,
+                                  k = settings.semanticSearchLimit,
                                 )
           // neighbor lookup window, like +/- 1 page
           fragmentsIndexRange =
@@ -47,7 +47,9 @@ final class InMemoryVectorStore(ref: Ref[IO, Vector[Embedding.Index]]) extends V
                                       documentId = embedding.documentId,
                                       contextId = embedding.contextId,
                                       fragmentIndex = embedding.fragmentIndex,
-                                      score = score, // score for the main chunk, not the neighboring chunk
+                                      semanticScore = score, // score for the main chunk, not the neighboring chunk
+                                      fullTextScore = 0d,    // not used in this implementation
+                                      rrfScore = 0d,         // not used in this implementation
                                     )
         yield neighboringChunk
 

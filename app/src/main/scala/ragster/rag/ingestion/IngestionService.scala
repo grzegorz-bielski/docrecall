@@ -71,6 +71,7 @@ final class ClickHouseIngestionService(using
       _ <- info"Document $documentId metadata persisted."
     yield document
 
+  // TODO: this is clunky, do we need document versions at all?
   private def getDocumentVersion(
     documentId: DocumentId,
     contextId: ContextId,

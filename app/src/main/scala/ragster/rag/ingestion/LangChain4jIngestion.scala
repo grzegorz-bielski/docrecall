@@ -61,6 +61,6 @@ object LangChain4jIngestion:
             chunk = Chunk(
               text = textSegment.text,
               index = 0,
-              metadata = Map.empty,
+              metadata = Metadata.empty,
             ),
           )

@@ -22,22 +22,10 @@ object Embedding:
     documentId: DocumentId,
     contextId: ContextId,
     fragmentIndex: Long,
-    semanticRank: Double,
-    fullTextRank: Double,
-    rrfRank: Double,
-  ):
-    override def toString: String = 
-      i"""
-      Retrieved(
-        chunk: $chunk,
-        value: [...],
-        documentId: $documentId, 
-        contextId: $contextId, 
-        fragmentIndex: $fragmentIndex, 
-        semanticRank: $semanticRank,
-        fullTextRank: $fullTextRank,
-        rrfRank: $rrfRank
-      """"
+    semanticScore: Double,
+    fullTextScore: Double,
+    rrfScore: Double,
+  )
 
   /** Embedding from the user query
     */

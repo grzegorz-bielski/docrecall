@@ -89,13 +89,17 @@ final case class Prompt(
         )
 
 final case class RetrievalSettings(
-  topK: Int,
+  fullTextSearchLimit: Int,
+  semanticSearchLimit: Int,
+  rrfLimit: Int,
   fragmentLookupRange: RetrievalSettings.LookupRange,
 ) derives ConfiguredJsonValueCodec
 
 object RetrievalSettings:
   lazy val default = RetrievalSettings(
-    topK = 15,
+    fullTextSearchLimit  = 20,
+    semanticSearchLimit  = 20,
+    rrfLimit = 5,
     fragmentLookupRange = LookupRange(lookBack = 5, lookAhead = 5),
   )
 
@@ -139,3 +143,32 @@ final case class ChatCompletionSettings(
 object ChatCompletionSettings:
   lazy val default: ChatCompletionSettings =
     ChatCompletionSettings()
+
+    //     WITH bm25_candidates AS (
+    //     SELECT id
+    //     FROM mock_items
+    //     WHERE description @@@ 'keyboard'
+    //     ORDER BY paradedb.score(id) DESC
+    //     LIMIT 20
+    // ),
+    // bm25_ranked AS (
+    //     SELECT id, RANK() OVER (ORDER BY paradedb.score(id) DESC) AS rank
+    //     FROM bm25_candidates
+    // ),
+    // semantic_search AS (
+    //     SELECT id, RANK() OVER (ORDER BY embedding <=> '[1,2,3]') AS rank
+    //     FROM mock_items
+    //     ORDER BY embedding <=> '[1,2,3]'
+    //     LIMIT 20
+    // )
+    // SELECT
+    //     COALESCE(semantic_search.id, bm25_ranked.id) AS id,
+    //     COALESCE(1.0 / (60 + semantic_search.rank), 0.0) +
+    //     COALESCE(1.0 / (60 + bm25_ranked.rank), 0.0) AS score,
+    //     mock_items.description,
+    //     mock_items.embedding
+    // FROM semantic_search
+    // FULL OUTER JOIN bm25_ranked ON semantic_search.id = bm25_ranked.id
+    // JOIN mock_items ON mock_items.id = COALESCE(semantic_search.id, bm25_ranked.id)
+    // ORDER BY score DESC, description
+    // LIMIT 5;
