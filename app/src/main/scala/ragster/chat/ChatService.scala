@@ -17,6 +17,7 @@ import java.time.Duration
 
 import ragster.rag.vectorstore.*
 import ragster.rag.*
+import ragster.postgres.*
 
 trait ChatService[F[_]]:
   /** Starts the query processing, which usually runs in the background.
@@ -96,10 +97,10 @@ object ChatService:
 
 final class ChatServiceImpl(
   pubSub: PubSub[IO],
+  retrieveEmbeddings: (Embedding.Query, RetrievalSettings) => Stream[IO, Embedding.Retrieved],
 )(using
   logger: Logger[IO],
   chatCompletionService: ChatCompletionService[IO],
-  vectorStore: VectorStoreRepository[IO],
   embeddingService: EmbeddingService[IO],
 ) extends ChatService[IO]:
   import ChatService.*
@@ -135,7 +136,7 @@ final class ChatServiceImpl(
                                chunk = Chunk(query.content, index = 0),
                                model = embeddingsModel,
                              )
-      retrievedEmbeddings <- vectorStore.retrieve(queryEmbeddings, retrievalSettings).compile.toVector
+      retrievedEmbeddings <- retrieveEmbeddings(queryEmbeddings, retrievalSettings).compile.toVector
 
       // _ <- info"Retrieved embeddings: $retrievedEmbeddings"
 
@@ -180,13 +181,18 @@ final class ChatServiceImpl(
 
 object ChatServiceImpl:
   def of()(using
+    SessionResource,
     ChatCompletionService[IO],
-    ContextRepository[IO],
-    VectorStoreRepository[IO],
+    PostgresEmbeddingsRepository,
     EmbeddingService[IO],
   ): Resource[IO, ChatService[IO]] =
     for
       given Logger[IO] <- Slf4jLogger.create[IO].toResource
       pubSub           <- PubSub.resource[IO]
-      chatService      <- ChatService.Supervised.of(ChatServiceImpl(pubSub))
+      getEmbeddings     = (query: Embedding.Query, settings: RetrievalSettings) =>
+                            Stream
+                              .resource(summon[SessionResource])
+                              .flatMap(summon[PostgresEmbeddingsRepository].retrieve(query, settings)(using _))
+
+      chatService <- ChatService.Supervised.of(ChatServiceImpl(pubSub, getEmbeddings))
     yield chatService

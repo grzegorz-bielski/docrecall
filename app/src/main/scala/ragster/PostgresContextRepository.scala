@@ -23,32 +23,10 @@ import ragster.postgres.*
 import PostgresContextRepository.*
 import ContextInfo.given
 
-trait ContextRepository[F[_]]:
-  def createOrUpdate(info: ContextInfo): F[Unit]
-  def getAll: F[Vector[ContextInfo]]
-  def get(contextId: ContextId): F[Option[ContextInfo]]
-  def getByName(name: String): F[Vector[ContextInfo]]
-  def delete(id: ContextId): F[Unit]
-
-final class PostgresContextRepository(sessionResource: SessionResource)(using Logger[IO]) extends ContextRepository[IO]:
-  private lazy val selectContextFragment =
-    sql"""
-    SELECT
-      id,
-      name,
-      description,
-      prompt_template,
-      retrieval_settings,
-      chat_completion_settings,
-      chat_model,
-      embeddings_model,
-      updated_at
-    FROM contexts
-    """
-
-  def get(id: ContextId): IO[Option[ContextInfo]] =
-    sessionResource.use:
-      _.prepare:
+final class PostgresContextRepository(using Logger[IO]):
+  def get(id: ContextId)(using session: Session[IO]): IO[Option[ContextInfo]] =
+    session
+      .prepare:
         sql"""
           $selectContextFragment
           WHERE id = ${ContextId.pgCodec}
@@ -57,9 +35,9 @@ final class PostgresContextRepository(sessionResource: SessionResource)(using Lo
       .flatMap(_.option(id))
 
   // `name` is not unique (!)
-  def getByName(name: String): IO[Vector[ContextInfo]] =
-    sessionResource.use:
-      _.prepare:
+  def getByName(name: String)(using session: Session[IO]): IO[Vector[ContextInfo]] =
+    session
+      .prepare:
         sql"""
           $selectContextFragment
           WHERE name = $text
@@ -68,15 +46,15 @@ final class PostgresContextRepository(sessionResource: SessionResource)(using Lo
       .flatMap:
         _.stream(name, chunkSize = 32).compile.toVector
 
-  def getAll: IO[Vector[ContextInfo]] =
-    sessionResource.use:
-      _.execute:
+  def getAll(using session: Session[IO]): IO[Vector[ContextInfo]] =
+    session
+      .execute:
         selectContextFragment.query(contextInfoCodec)
       .map(_.toVector)
 
-  def createOrUpdate(info: ContextInfo): IO[Unit] =
-    sessionResource.use:
-      _.prepare:
+  def createOrUpdate(info: ContextInfo)(using session: Session[IO]): IO[Unit] =
+    session
+      .prepare:
         sql"""
           INSERT INTO contexts (
             id,
@@ -102,19 +80,32 @@ final class PostgresContextRepository(sessionResource: SessionResource)(using Lo
       .flatMap(_.execute(info))
       .void
 
-  def delete(id: ContextId): IO[Unit] =
-    sessionResource
-      .use:
-        _.prepare:
-          sql"""DELETE FROM contexts WHERE id = ${ContextId.pgCodec}""".command
-        .flatMap(_.execute(id))
+  def delete(id: ContextId)(using session: Session[IO]): IO[Unit] =
+    session
+      .prepare:
+        sql"""DELETE FROM contexts WHERE id = ${ContextId.pgCodec}""".command
+      .flatMap(_.execute(id))
       .void
 
 object PostgresContextRepository:
-  def of(using sessionResource: SessionResource): IO[ContextRepository[IO]] =
+  def of: IO[PostgresContextRepository] =
     for given Logger[IO] <- Slf4jLogger.create[IO]
-    yield PostgresContextRepository(sessionResource)
+    yield PostgresContextRepository()
 
+  private lazy val selectContextFragment =
+    sql"""
+    SELECT
+      id,
+      name,
+      description,
+      prompt_template,
+      retrieval_settings,
+      chat_completion_settings,
+      chat_model,
+      embeddings_model
+    FROM contexts
+    """
+  
   private lazy val contextInfoCodec: Codec[ContextInfo] =
     (
       ContextId.pgCodec *:

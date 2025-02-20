@@ -318,7 +318,7 @@ object ContextView extends HtmxView:
       div(
         cls := "min-h-8 py-2 px-3 text-xs flex gap-3 items-center",
         span(IconsView.documentIcon()),
-        span(cls      := "text-wrap break-all", s"${document.name} - v${document.version}"),
+        span(cls      := "text-wrap break-all", s"${document.name}"),
         button(
           `hx-delete` := documentDeleteUrl(document),
           `hx-target` := s"#$documentFileId",

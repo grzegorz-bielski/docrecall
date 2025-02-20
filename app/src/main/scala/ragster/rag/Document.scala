@@ -14,7 +14,6 @@ object Document:
     id: DocumentId,
     contextId: ContextId,
     name: DocumentName,
-    version: DocumentVersion,
     description: String,
     `type`: String,
     metadata: Metadata,

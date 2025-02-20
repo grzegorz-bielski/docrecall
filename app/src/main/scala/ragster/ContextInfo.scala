@@ -2,6 +2,7 @@ package ragster
 
 import cats.effect.*
 import java.util.UUID
+import java.time.*
 import com.github.plokhotnyuk.jsoniter_scala.core.*
 import com.github.plokhotnyuk.jsoniter_scala.macros.*
 import cats.syntax.all.*
@@ -24,7 +25,7 @@ final case class ContextInfo(
   retrievalSettings: RetrievalSettings,
   chatCompletionSettings: ChatCompletionSettings,
   chatModel: Model,
-  embeddingsModel: Model,
+  embeddingsModel: Model
 )
 
 object ContextInfo:

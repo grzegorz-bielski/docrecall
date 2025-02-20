@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS embeddings
     value TEXT, -- value (likely just text) of the chunk
     metadata JSONB, -- any additional metadata of the chunk
     embedding VECTOR(1024), -- embedding vector of the chunk (assuming 1024-dimensional vectors)
-    updated_at TIMESTAMP DEFAULT NOW()
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_embeddings_context_document_id ON embeddings(context_id, document_id);

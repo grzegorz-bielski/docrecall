@@ -3,12 +3,14 @@ package rag
 package ingestion
 
 import cats.effect.*
+import cats.effect.syntax.all.*
 import fs2.*
 import org.typelevel.log4cats.syntax.*
 import org.typelevel.log4cats.slf4j.*
 import org.typelevel.log4cats.*
-
+import skunk.*
 import ragster.rag.vectorstore.*
+import ragster.postgres.*
 
 trait IngestionService[F[_]]:
   def ingest(input: IngestionService.Input): F[Document.Ingested]
@@ -22,77 +24,66 @@ object IngestionService:
     content: Stream[IO, Byte],
   )
 
-final class ClickHouseIngestionService(using
-  documentRepository: DocumentRepository[IO],
+final class PostgresIngestionService(using
+  sessionResource: SessionResource,
+  documentRepository: PostgresDocumentRepository,
   embeddingsService: EmbeddingService[IO],
-  vectorStoreRepository: VectorStoreRepository[IO],
+  vectorStoreRepository: PostgresEmbeddingsRepository,
   logger: Logger[IO],
 ) extends IngestionService[IO]:
   def purge(contextId: ContextId, documentId: DocumentId): IO[Unit] =
-    for
-      _ <- vectorStoreRepository.delete(contextId, documentId)
-      _ <- documentRepository.delete(documentId)
-      _ <- info"Deleted document: $documentId and all its embeddings."
-    yield ()
+    sessionResource.useGiven:
+      for
+        _ <- vectorStoreRepository.delete(contextId, documentId)
+        _ <- documentRepository.delete(documentId)
+        _ <- info"Deleted document: $documentId and all its embeddings."
+      yield ()
 
   def ingest(input: IngestionService.Input): IO[Document.Ingested] =
     import input.*
 
-    // TODO: this has a lot of moving pieces, maybe it can be done in more atomic way?
-    for
-      documentId      <- DocumentId.of
-      documentVersion <- getDocumentVersion(documentId, contextId, documentName)
+    sessionResource.useGiven: (session: Session[IO]) ?=>
+      for
+        documentId      <- DocumentId.of
 
-      documentFragments <- LangChain4jIngestion.loadFrom(content, maxTokens = embeddingsModel.contextLength)
-      _                 <- info"Document $documentId: loaded ${documentFragments.size} fragments from the document."
+        _documentFragments <- LangChain4jIngestion.loadFrom(content, maxTokens = embeddingsModel.contextLength)
+        // TODO: temp
+        documentFragments   = _documentFragments.take(2)
+        _                  <- info"Document $documentId: loaded ${documentFragments.size} fragments from the document."
 
-      documentInfo = Document.Info(
-                       id = documentId,
-                       contextId = contextId,
-                       name = documentName,
-                       description = "",
-                       version = documentVersion,
-                       `type` = "PDF", // TODO: infer from content...
-                       metadata = Metadata.empty,
-                     )
-      document     = Document.Ingested(
-                       info = documentInfo,
-                       fragments = documentFragments,
-                     )
+        documentInfo = Document.Info(
+                         id = documentId,
+                         contextId = contextId,
+                         name = documentName,
+                         description = "",
+                         `type` = "PDF", // TODO: infer from content...
+                         metadata = Metadata.empty,
+                       )
+        document     = Document.Ingested(
+                         info = documentInfo,
+                         fragments = documentFragments,
+                       )
 
-      _               <- info"Creating embeddings for document: $documentId."
-      indexEmbeddings <- embeddingsService.createIndexEmbeddings(document, model = embeddingsModel)
-      _               <- info"Document $documentId: created ${indexEmbeddings.size} embeddings."
+        _               <- info"Creating embeddings for document: $documentId."
+        indexEmbeddings <- embeddingsService.createIndexEmbeddings(document, model = embeddingsModel)
+        _               <- info"Document $documentId: created ${indexEmbeddings.size} embeddings."
 
-      _ <- vectorStoreRepository.store(indexEmbeddings)
-      _ <- info"Document $documentId: embeddings persisted."
+        _ <- session.transaction.use: _ =>
+               for
+                 _ <- documentRepository.createOrUpdate(document.info)
+                 _ <- info"Document $documentId metadata persisted."
 
-      _ <- documentRepository.createOrUpdate(document.info)
-      _ <- info"Document $documentId metadata persisted."
-    yield document
+                 _ <- vectorStoreRepository.store(indexEmbeddings)
+                 _ <- info"Document $documentId: embeddings persisted."
+               yield ()
+      yield document
 
-  // TODO: this is clunky, do we need document versions at all?
-  private def getDocumentVersion(
-    documentId: DocumentId,
-    contextId: ContextId,
-    documentName: DocumentName,
-  ): IO[DocumentVersion] =
-    for
-      maybeDocumentWithSameName       <- documentRepository.get(contextId, documentName)
-      documentVersion: DocumentVersion = maybeDocumentWithSameName.fold(DocumentVersion(1))(_.version.next)
-      _                               <-
-        val logContent = maybeDocumentWithSameName
-          .map(_.id)
-          .fold("name is unique")(id => s"document $id has the same name, increased version number: $documentVersion")
-
-        info"Document $documentId: $logContent."
-    yield documentVersion
-
-object ClickHouseIngestionService:
+object PostgresIngestionService:
   def of(using
-    DocumentRepository[IO],
+    SessionResource,
+    PostgresDocumentRepository,
     EmbeddingService[IO],
-    VectorStoreRepository[IO],
-  ): IO[ClickHouseIngestionService] =
+    PostgresEmbeddingsRepository,
+  ): IO[PostgresIngestionService] =
     for given Logger[IO] <- Slf4jLogger.create[IO]
-    yield ClickHouseIngestionService()
+    yield PostgresIngestionService()

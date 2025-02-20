@@ -10,7 +10,6 @@ import com.github.plokhotnyuk.jsoniter_scala.macros.*
 import org.typelevel.log4cats.*
 import org.typelevel.log4cats.slf4j.*
 import org.typelevel.log4cats.syntax.*
-import unindent.*
 import java.util.UUID
 import skunk.*
 import skunk.data.*
@@ -18,12 +17,13 @@ import skunk.codec.all.*
 import skunk.syntax.all.*
 
 import ragster.postgres.*
-final class PostgresVectorStore(sessionResource: SessionResource)(using Logger[IO]) extends VectorStoreRepository[IO]:
-  import PostgresVectorStore.*
 
-  def delete(contextId: ContextId, documentId: DocumentId): IO[Unit] =
-    sessionResource.use:
-      _.prepare:
+final class PostgresEmbeddingsRepository(using Logger[IO]):
+  import PostgresEmbeddingsRepository.*
+
+  def delete(contextId: ContextId, documentId: DocumentId)(using session: Session[IO]): IO[Unit] =
+    session
+      .prepare:
         sql"""
         DELETE FROM embeddings
         WHERE
@@ -31,24 +31,24 @@ final class PostgresVectorStore(sessionResource: SessionResource)(using Logger[I
           document_id = ${DocumentId.pgCodec}
         """.command
       .flatMap(_.execute((contextId, documentId)))
-        .void
+      .void
 
-  def store(index: Vector[Embedding.Index]): IO[Unit] =
+  def store(index: Vector[Embedding.Index])(using session: Session[IO]): IO[Unit] =
     val values = index.toList.map: e =>
       (e.contextId, e.documentId, e.fragmentIndex, e.chunk.index, e.chunk.text, e.chunk.metadata, Arr(e.value*))
 
-    sessionResource.use:
-      _.prepare:
+    session
+      .prepare:
         sql"""
         INSERT INTO embeddings (context_id, document_id, fragment_index, chunk_index, value, metadata, embedding)
         VALUES ${embeddingToStoreCodec.values.list(values)}
         """.command
       .flatMap(_.execute(values))
-        .void
+      .void
 
-  def documentEmbeddingsExists(contextId: ContextId, documentId: DocumentId): IO[Boolean] =
-    sessionResource.use:
-      _.prepare:
+  def documentEmbeddingsExists(contextId: ContextId, documentId: DocumentId)(using session: Session[IO]): IO[Boolean] =
+    session
+      .prepare:
         sql"""
         SELECT
          EXISTS(
@@ -62,7 +62,9 @@ final class PostgresVectorStore(sessionResource: SessionResource)(using Logger[I
         """.query(bool)
       .flatMap(_.unique((contextId, documentId)))
 
-  def retrieve(embedding: Embedding.Query, settings: RetrievalSettings): Stream[IO, Embedding.Retrieved] =
+  def retrieve(embedding: Embedding.Query, settings: RetrievalSettings)(using
+    session: Session[IO],
+  ): Stream[IO, Embedding.Retrieved] =
     val args =
       (
         embedding.contextId,
@@ -77,14 +79,13 @@ final class PostgresVectorStore(sessionResource: SessionResource)(using Logger[I
       )
 
     Stream
-      .resource(sessionResource)
-      .flatMap(session => Stream.eval(session.prepare(retrieveQuery)))
+      .eval(session.prepare(retrieveQuery))
       .flatMap(_.stream(args = args, chunkSize = 1024))
 
-object PostgresVectorStore:
-  def of(using sessionResource: SessionResource): IO[PostgresVectorStore] =
+object PostgresEmbeddingsRepository:
+  def of: IO[PostgresEmbeddingsRepository] =
     for given Logger[IO] <- Slf4jLogger.create[IO]
-    yield PostgresVectorStore(sessionResource)
+    yield PostgresEmbeddingsRepository()
 
   private lazy val embeddingToStoreCodec =
     ContextId.pgCodec *:
@@ -114,40 +115,66 @@ object PostgresVectorStore:
           rrfScore = rrfScore,
         )
 
-  // see: https://docs.paradedb.com/documentation/guides/hybrid        
-  private lazy val retrieveQuery =  
+  // see: https://docs.paradedb.com/documentation/guides/hybrid
+
+  // TODO: (1 - <=>) ???
+  // https://github.com/pgvector/pgvector
+  // https://github.com/supabase/supabase/issues/12244
+//   select id, cosine_distance, cosine_sim, RANK() OVER (ORDER BY cosine_distance DESC) AS rank from (
+// select
+// id,
+// embedding <=> array_fill(0.1, ARRAY[1024])::vector as cosine_distance,
+// 1 - (embedding <=> array_fill(0.1, ARRAY[1024])::vector) as cosine_sim
+// FROM embeddings
+// order by embedding <=> array_fill(0.1, ARRAY[1024])::vector
+// LIMIT 10
+// )
+
+  private lazy val retrieveQuery =
     sql"""
     WITH
       full_text_search AS (
         SELECT
           id,
-          paradedb.score(id) AS full_text_score,
-          RANK() OVER (ORDER BY full_text_score DESC) AS rank
+          paradedb.score(id) AS full_text_score
         FROM embeddings
         WHERE
           context_id = ${ContextId.pgCodec} AND
           value @@@ $text
-        ORDER BY score DESC
+        ORDER BY full_text_score DESC
         LIMIT $int4
+      ),
+      full_text_search_ranked AS (
+        SELECT
+          id,
+          full_text_score,
+          RANK() OVER (ORDER BY full_text_score DESC) AS rank
+        FROM full_text_search
       ),
       semantic_search AS (
         SELECT
           id,
-          embedding <=> $_float4 AS semantic_score,
-          RANK() OVER (ORDER BY semantic_score) AS rank
+          embedding <=> $_float4::vector AS semantic_score
         FROM embeddings
         WHERE
           context_id = ${ContextId.pgCodec}
         ORDER BY semantic_score
         LIMIT $int4
       ),
+      semantic_search_ranked AS (
+        SELECT
+          id,
+          semantic_score,
+          RANK() OVER (ORDER BY semantic_score) AS rank
+        FROM semantic_search
+      ),
       matched AS (
         SELECT
-          COALESCE(semantic_search.id, full_text_search.id) AS id,
-          COALESCE(1.0 / (60 + semantic_search.rank), 0.0) + 
-          COALESCE(1.0 / (60 + full_text_search.rank), 0.0) AS rrf_score
-        FROM semantic_search
-        FULL OUTER JOIN full_text_search ON semantic_search.id = full_text_search.id
+          COALESCE(semantic_search_ranked.id, full_text_search_ranked.id) AS id,
+          COALESCE(1.0 / (60 + semantic_search_ranked.rank), 0.0) + 
+          COALESCE(1.0 / (60 + full_text_search_ranked.rank), 0.0) AS rrf_score
+        FROM semantic_search_ranked
+        FULL OUTER JOIN full_text_search_ranked ON semantic_search_ranked.id = full_text_search_ranked.id
         ORDER BY rrf_score DESC
         LIMIT $int4
       ),
@@ -174,4 +201,4 @@ object PostgresVectorStore:
       BETWEEN matched_fragment_index - $int4 AND matched_fragment_index + $int4
     ORDER BY document_id, fragment_index, chunk_index
     """
-    .query(storedEmbeddingCodec)
+      .query(storedEmbeddingCodec)

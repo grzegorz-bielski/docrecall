@@ -5,41 +5,43 @@ import cats.effect.syntax.all.*
 import cats.effect.*
 import java.util.UUID
 import fs2.io.file.{Files, Path, Flags}
+import skunk.*
 
 import ragster.rag.*
 import ragster.rag.ingestion.*
 import ragster.rag.vectorstore.*
-import ragster.clickhouse.*
+import ragster.postgres.*
 
 // dev only test data
 object Fixtures:
   def loadFixtures()(using
-    VectorStoreRepository[IO],
-    ContextRepository[IO],
+    SessionResource,
+    PostgresEmbeddingsRepository,
+    PostgresContextRepository,
     IngestionService[IO],
-    DocumentRepository[IO],
+    PostgresDocumentRepository,
     AppConfig,
   ) =
     IO.whenA(AppConfig.get.loadFixtures):
-      Files[IO]
-        .list(Path("./app/content"))
-        .take(1) // only first file, so it's faster
-        .evalMap: path =>
-          IO.println(s"Processing file: $path") *> createLocalPdfEmbeddings(path)
-        .compile
-        .drain
+      summon[SessionResource].useGiven:
+        Files[IO]
+          .list(Path("./app/content"))
+          .take(1) // only first file, so it's faster
+          .evalMap: path =>
+            IO.println(s"Processing file: $path") *> createLocalPdfEmbeddings(path)
+          .compile
+          .drain
 
   private def createLocalPdfEmbeddings(path: Path)(using
-    vectorStore: VectorStoreRepository[IO],
-    contextRepository: ContextRepository[IO],
+    vectorStore: PostgresEmbeddingsRepository,
+    contextRepository: PostgresContextRepository,
     ingestionService: IngestionService[IO],
-    documentRepository: DocumentRepository[IO],
-  ) =
+    documentRepository: PostgresDocumentRepository,
+  )(using Session[IO]) =
     // hardcoded
     val contextId       = ContextId(UUID.fromString("f47b3b3e-0b3b-4b3b-8b3b-3b3b3b3b3b3b"))
     val documentId      = DocumentId(UUID.fromString("f47b3b3e-0b3b-4b3b-8b3b-3b3b3b3b3b3b"))
     val documentName    = DocumentName(path.fileName.toString)
-    val documentVersion = DocumentVersion(1)
 
     vectorStore
       .documentEmbeddingsExists(contextId, documentId)

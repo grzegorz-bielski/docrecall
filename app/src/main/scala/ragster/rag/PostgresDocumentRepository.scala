@@ -22,54 +22,40 @@ import ragster.postgres.*
 
 import PostgresDocumentRepository.*
 
-final class PostgresDocumentRepository(sessionResource: SessionResource)(using Logger[IO]) extends DocumentRepository[IO]:
-  private lazy val selectDocumentFragment =
-    sql"""
-    SELECT
-      id, 
-      context_id, 
-      name, 
-      description, 
-      version, 
-      type,
-      metadata
-    FROM documents
-    """
+final class PostgresDocumentRepository(using Logger[IO]):
+  // TODO: pagination?
+  def getAll(contextId: ContextId)(using session: Session[IO]): IO[Vector[Document.Info]] =
+      session
+        .execute:
+          selectDocumentFragment.query(documentInfoCodec)
+        .map(_.toVector)
 
-  def getAll(contextId: ContextId): IO[Vector[Document.Info]] =
-    sessionResource.use:
-      _.execute:
-        selectDocumentFragment.query(documentInfoCodec)
-      .map(_.toVector)
+  // TODO: not used + name is not unique, there could be multiple results
+  // def get(contextId: ContextId, name: DocumentName)(using session: Session[IO]): IO[Option[Document.Info]] =
+  //   session
+  //     .prepare:
+  //       sql"""
+  //       $selectDocumentFragment
+  //       WHERE context_id = ${ContextId.pgCodec}
+  //       AND name = $text
+  //       """
+  //       .query(documentInfoCodec)
+  //     .flatMap(_.option((contextId, name)))
 
-  def get(contextId: ContextId, name: DocumentName): IO[Option[Document.Info]] =
-    sessionResource.use:
-      _.prepare:
-        sql"""
-        $selectDocumentFragment
-        WHERE context_id = ${ContextId.pgCodec}
-        AND name = $text
-        """
-        .query(documentInfoCodec)
-      .flatMap(_.option((contextId, name)))
-
-  def createOrUpdate(document: Document.Info): IO[Unit] =
-    sessionResource
-      .use:
-        _.prepare:
+  def createOrUpdate(document: Document.Info)(using session: Session[IO]): IO[Unit] =
+      session
+        .prepare:
           sql"""
           INSERT INTO documents (
             id,
             context_id,
             name,
             description,
-            version,
             type,
             metadata
-          ) VALUES ($documentInfoCodec),
+          ) VALUES ($documentInfoCodec)
            ON CONFLICT (id) DO UPDATE SET
               description = EXCLUDED.description,
-              version = EXCLUDED.version,
               type = EXCLUDED.type,
               metadata = EXCLUDED.metadata
           """
@@ -77,26 +63,35 @@ final class PostgresDocumentRepository(sessionResource: SessionResource)(using L
         .flatMap(_.execute(document))
       .void
 
-  def delete(id: DocumentId): IO[Unit] =
-    sessionResource
-      .use:
-        _.prepare:
-          sql"""DELETE FROM contexts WHERE id = ${DocumentId.pgCodec}""".command
-        .flatMap(_.execute(id))
+  def delete(id: DocumentId)(using session: Session[IO]): IO[Unit] =
+    session
+      .prepare:
+        sql"""DELETE FROM contexts WHERE id = ${DocumentId.pgCodec}""".command
+      .flatMap(_.execute(id))
       .void
 
 object PostgresDocumentRepository:
-  def of(using sessionResource: SessionResource): IO[PostgresDocumentRepository] =
+  def of: IO[PostgresDocumentRepository] =
     for given Logger[IO] <- Slf4jLogger.create[IO]
-    yield PostgresDocumentRepository(sessionResource)
+    yield PostgresDocumentRepository()
 
+  private lazy val selectDocumentFragment =
+    sql"""
+    SELECT
+      id, 
+      context_id, 
+      name,
+      description, 
+      type,
+      metadata
+    FROM documents
+    """
 
   private lazy val documentInfoCodec: Codec[Document.Info] =
     (
       DocumentId.pgCodec *:
         ContextId.pgCodec *:
         DocumentName.pgCodec *:
-        DocumentVersion.pgCodec *:
         text *:
         text *:
         Metadata.pgCodec

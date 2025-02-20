@@ -11,17 +11,28 @@ import org.typelevel.log4cats.*
 import org.typelevel.log4cats.slf4j.*
 import org.typelevel.log4cats.syntax.*
 import scala.util.Try
+import skunk.*
 
 import ragster.chat.*
+import ragster.postgres.*
 
 import ChatService.*
 import SlackCommandsServiceImpl.*
+import SlackCommandsService.*
 
 trait SlackCommandsService[F[_]]:
   def process(cmd: SlackCommand): F[Unit]
 
 object SlackCommandsService:
-  def of(using AppConfig, SttpBackend, ChatService[IO], ContextRepository[IO]): Resource[IO, SlackCommandsService[IO]] =
+  type GetCtxByName = String => IO[Vector[ContextInfo]]
+
+  def of(using
+    AppConfig,
+    SttpBackend,
+    ChatService[IO],
+    PostgresContextRepository,
+    SessionResource,
+  ): Resource[IO, SlackCommandsService[IO]] =
     for
       given Logger[IO]     <- Slf4jLogger.create[IO].toResource
       given SlackClient[IO] = SttpSlackClient()
@@ -29,13 +40,19 @@ object SlackCommandsService:
       service              <- of(
                                 maxSessions = slackConfig.maxSessions,
                                 maxConcurrentSessions = slackConfig.maxConcurrentSessions,
+                                getContextByName = name => summon[SessionResource].useGiven(summon[PostgresContextRepository].getByName(name)),
                               )
     yield service
 
   def of(
     maxSessions: Int,
     maxConcurrentSessions: Int,
-  )(using ChatService[IO], ContextRepository[IO], Logger[IO], SlackClient[IO]): Resource[IO, SlackCommandsService[IO]] =
+    getContextByName: GetCtxByName,
+  )(using
+    ChatService[IO],
+    Logger[IO],
+    SlackClient[IO],
+  ): Resource[IO, SlackCommandsService[IO]] =
     for
       given SlackActionsExecutor <- SlackActionsExecutor
                                       .of(
@@ -44,13 +61,12 @@ object SlackCommandsService:
                                       )
                                       .toResource
       _                          <- summon[SlackActionsExecutor].stream.compile.drain.background
-    yield SlackCommandsServiceImpl()
+    yield SlackCommandsServiceImpl(getContextByName)
 
 final case class UserQuery(context: String, query: String)
 
-final class SlackCommandsServiceImpl(using
+final class SlackCommandsServiceImpl(getContextByName: GetCtxByName)(using
   chatService: ChatService[IO],
-  contextRepository: ContextRepository[IO],
   logger: Logger[IO],
   slackClient: SlackClient[IO],
   executor: SlackActionsExecutor,
@@ -81,7 +97,7 @@ final class SlackCommandsServiceImpl(using
           case Some(UserQuery(contextName, userQuery)) =>
             // any Slack response to the webhook could be send up to 5 times within 30 minutes
             for
-              context <- contextRepository.getByName(contextName)
+              context <- getContextByName(contextName)
               _       <- info"Found context(s): ${context}. Taking the first one, if any"
               action   = context.headOption match
                            case Some(contextInfo) =>

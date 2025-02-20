@@ -1,6 +1,8 @@
 //> using scala 3.6.3
 //> using resourceDir ../../resources
 
+//> using options -experimental -language:experimental.betterFors
+
 //> using toolkit typelevel:0.1.29
 
 //> using dep org.typelevel::kittens::3.4.0

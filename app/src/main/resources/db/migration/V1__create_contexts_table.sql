@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS contexts
     chat_completion_settings JSONB, -- a JSONB object of the chat completion settings
     chat_model JSONB, -- name of the chat model
     embeddings_model JSONB, -- name of the embeddings model
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- default to the current timestamp
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Create an index on the name column for faster filtering

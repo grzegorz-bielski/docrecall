@@ -25,16 +25,16 @@ object Ragster extends ResourceApp.Forever:
       given Logger[IO]  <- Slf4jLogger.create[IO].toResource
       given SttpBackend <- SttpBackend.resource
 
-      given SessionResource           <- PostgresSessionPool.of
-      given ContextRepository[IO]     <- PostgresContextRepository.of.toResource
-      given DocumentRepository[IO]    <- PostgresDocumentRepository.of.toResource
-      given VectorStoreRepository[IO] <- PostgresVectorStore.of.toResource
+      given SessionResource              <- PostgresSessionPool.of
+      given PostgresContextRepository    <- PostgresContextRepository.of.toResource
+      given PostgresDocumentRepository   <- PostgresDocumentRepository.of.toResource
+      given PostgresEmbeddingsRepository <- PostgresEmbeddingsRepository.of.toResource
 
       inferenceModule                 = InferenceModule.of
       given ChatCompletionService[IO] = inferenceModule.chatCompletionService
       given EmbeddingService[IO]      = inferenceModule.embeddingService
 
-      given IngestionService[IO] <- ClickHouseIngestionService.of.toResource
+      given IngestionService[IO] <- PostgresIngestionService.of.toResource
       given ChatService[IO]      <- ChatServiceImpl.of()
 
       contextController <- ContextController.of()
@@ -44,22 +44,20 @@ object Ragster extends ResourceApp.Forever:
       given SlackCommandsService[IO] <- SlackCommandsService.of
       slackBotController             <- SlackBotController.of
 
-      _ <- summon[ContextRepository[IO]].get(ContextId(java.util.UUID.randomUUID())).toResource
-
       // _ <- runInitialHealthChecks().toResource
 
       // state-changing side effects (!)
-      // _ <- ClickHouseMigrator.migrate().toResource
-      // _ <- Fixtures.loadFixtures().toResource
       _ <- ragster.Migrations.run.toResource
+      _ <- Fixtures.loadFixtures().toResource
+      // _ <- summon[ContextRepository[IO]].get(ContextId(java.util.UUID.randomUUID())).toResource
 
-    // _ <- httpApp(
-    //        controllers = Vector(
-    //          contextController,
-    //          homeController,
-    //          slackBotController,
-    //        ),
-    //      )
+      _ <- httpApp(
+             controllers = Vector(
+               contextController,
+               homeController,
+               slackBotController,
+             ),
+           )
     yield ()
 
   // private def runInitialHealthChecks()(using clickHouseClient: ClickHouseClient[IO], logger: Logger[IO]) =

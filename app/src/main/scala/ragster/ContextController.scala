@@ -16,6 +16,7 @@ import org.typelevel.log4cats.*
 import org.typelevel.log4cats.slf4j.*
 import org.typelevel.log4cats.syntax.*
 import scalatags.Text.all.*
+import skunk.*
 import scala.concurrent.duration.{span as _, *}
 import java.util.UUID
 
@@ -23,11 +24,13 @@ import ragster.chat.*
 import ragster.rag.vectorstore.*
 import ragster.rag.*
 import ragster.rag.ingestion.*
+import ragster.postgres.*
 
 final class ContextController(using
+  sessionResource: SessionResource,
   logger: Logger[IO],
-  contextRepository: ContextRepository[IO],
-  documentRepository: DocumentRepository[IO],
+  contextRepository: PostgresContextRepository,
+  documentRepository: PostgresDocumentRepository,
   ingestionService: IngestionService[IO],
   chatService: ChatService[IO],
   appConfig: AppConfig,
@@ -43,44 +46,47 @@ final class ContextController(using
 
     HttpRoutes.of[IO]:
       case GET -> Root =>
-        for
-          contexts <- contextRepository.getAll
-          response <- Ok(
-            ContextView
-              .contextsOverview(
-                contexts, 
-                createNewUrl = "/contexts/new",
-                contextUrl = id => s"/contexts/$id"
-              )
-          )
-        yield response
+        sessionResource.useGiven:
+          for
+            contexts <- contextRepository.getAll
+            response <- Ok(
+              ContextView
+                .contextsOverview(
+                  contexts, 
+                  createNewUrl = "/contexts/new",
+                  contextUrl = id => s"/contexts/$id"
+                )
+            )
+          yield response
 
       case GET -> Root / "new" =>
-        for
-          context <- ContextInfo.default
-          _       <- contextRepository.createOrUpdate(context)
-          response = Response[IO]()
-                       .withStatus(Status.SeeOther)
-                       .withHeaders(Location(Uri.unsafeFromString(s"/$prefix/${context.id}")))
-        //  .withHeaders(Location(uri"/$prefix/${context.id.toString}")) -- implementation is missing ??
-        yield response
+        sessionResource.useGiven:
+          for
+            context <- ContextInfo.default
+            _       <- contextRepository.createOrUpdate(context)
+            response = Response[IO]()
+                        .withStatus(Status.SeeOther)
+                        .withHeaders(Location(Uri.unsafeFromString(s"/$prefix/${context.id}")))
+          //  .withHeaders(Location(uri"/$prefix/${context.id.toString}")) -- implementation is missing ??
+          yield response
 
       case GET -> Root / ContextIdVar(contextId) =>
-        getContextOrNotFound(contextId): contextInfo =>
-          for
-            documents <- documentRepository.getAll(contextInfo.id)
-            response  <- Ok(
-                           ContextView.view(
-                             contextInfo = contextInfo,
-                             uploadUrl = s"/$prefix/${contextInfo.id}/documents/upload",
-                             chatPostUrl = s"/$prefix/${contextInfo.id}/chat/query",
-                             contextUpdateUrl = s"/$prefix/${contextInfo.id}/update",
-                             documents = documents,
-                             fileFieldName = fileFieldName,
-                             documentDeleteUrl = documentDeleteUrl,
-                           ),
-                         )
-          yield response
+        sessionResource.useGiven:
+          getContextOrNotFound(contextId): contextInfo =>
+            for
+              documents <- documentRepository.getAll(contextInfo.id)
+              response  <- Ok(
+                            ContextView.view(
+                              contextInfo = contextInfo,
+                              uploadUrl = s"/$prefix/${contextInfo.id}/documents/upload",
+                              chatPostUrl = s"/$prefix/${contextInfo.id}/chat/query",
+                              contextUpdateUrl = s"/$prefix/${contextInfo.id}/update",
+                              documents = documents,
+                              fileFieldName = fileFieldName,
+                              documentDeleteUrl = documentDeleteUrl,
+                            ),
+                          )
+            yield response
 
       case req @ DELETE -> Root / ContextIdVar(contextId) =>
         purgeContext(contextId) *> Ok()
@@ -142,10 +148,11 @@ final class ContextController(using
           for
             contextInfo <- req.as[ContextInfoFormDto].map(_.asContextInfo(context.id))
             _           <- info"Updating context: $contextInfo"
-            response    <- contextInfo.fold(
-                             BadRequest(_),
-                             contextRepository.createOrUpdate(_) *> Ok(),
-                           )
+            response    <- sessionResource.useGiven: 
+              contextInfo.fold(
+                BadRequest(_),
+                contextRepository.createOrUpdate(_) *> Ok(),
+              )
           yield response
 
       case req @ POST -> Root / ContextIdVar(contextId) / "documents" / "upload" =>
@@ -179,25 +186,28 @@ final class ContextController(using
           yield response
 
   private def getContextOrNotFound(contextId: ContextId)(fn: ContextInfo => IO[Response[IO]]): IO[Response[IO]] =
-    contextRepository
-      .get(contextId)
-      .flatMap:
-        case Some(context) => fn(context)
-        case None          => NotFound()
+    sessionResource.useGiven:
+      contextRepository
+        .get(contextId)
+        .flatMap:
+          case Some(context) => fn(context)
+          case None          => NotFound()
 
   private def purgeContext(contextId: ContextId): IO[Unit] =
-    for
-      documents <- documentRepository.getAll(contextId)
-      _         <- warn"Purging context: $contextId with all of its ${documents.length} documents (!)"
-      _         <- documents.parTraverse: doc =>
-                     ingestionService.purge(contextId, doc.id)
-      _         <- contextRepository.delete(contextId)
-    yield ()
+    sessionResource.useGiven:
+      for
+        documents <- documentRepository.getAll(contextId)
+        _         <- warn"Purging context: $contextId with all of its ${documents.length} documents (!)"
+        _         <- documents.parTraverse: doc =>
+                      ingestionService.purge(contextId, doc.id)
+        _         <- contextRepository.delete(contextId)
+      yield ()
 
 object ContextController:
   def of()(using
-    ContextRepository[IO],
-    DocumentRepository[IO],
+    SessionResource,
+    PostgresContextRepository,
+    PostgresDocumentRepository,
     ChatService[IO],
     IngestionService[IO],
     AppConfig,
