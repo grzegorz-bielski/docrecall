@@ -22,9 +22,10 @@ object Embedding:
     documentId: DocumentId,
     contextId: ContextId,
     fragmentIndex: Long,
+    matchedFragmentIndex: Long,
     semanticScore: Double,
-    fullTextScore: Double,
-    rrfScore: Double,
+    fullTextScore: Float,
+    rrfScore: BigDecimal,
   )
 
   /** Embedding from the user query

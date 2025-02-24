@@ -174,6 +174,7 @@ final class ChatServiceImpl(
     yield ()
 
   def subscribeToQueryResponses(queryId: QueryId): Stream[IO, Response] =
+    // TODO: keep in-progress queries in state and reject requests for non-existent ones?
     Stream.eval(info"Waiting for query completion: $queryId") *>
       pubSub
         .subscribe(queryId)

@@ -68,7 +68,7 @@ final class PostgresEmbeddingsRepository(using Logger[IO]):
     val args =
       (
         embedding.contextId,
-        embedding.chunk.text,
+        escapeSingleQuite(embedding.chunk.text),
         settings.fullTextSearchLimit,
         Arr(embedding.value*),
         embedding.contextId,
@@ -81,6 +81,11 @@ final class PostgresEmbeddingsRepository(using Logger[IO]):
     Stream
       .eval(session.prepare(retrieveQuery))
       .flatMap(_.stream(args = args, chunkSize = 1024))
+
+
+  // TODO: it doesn't work... 
+  // ParseError(SyntaxError("value:(What''s Jack OS API ?)"), "value:(What''s Jack OS API ?)").
+  private def escapeSingleQuite(str: String) = str.replace("'", "''")
 
 object PostgresEmbeddingsRepository:
   def of: IO[PostgresEmbeddingsRepository] =
@@ -97,9 +102,10 @@ object PostgresEmbeddingsRepository:
       _float4
 
   private lazy val storedEmbeddingCodec =
-    (embeddingToStoreCodec *: float8 *: float8 *: float8).map:
+    (embeddingToStoreCodec *: int8 *: float4 *: float8 *: numeric).map:
       case (
             (contextId, documentId, fragmentIndex, chunkIndex, text, metadata, embedding),
+            matchedFragmentIndex,
             fullTextScore,
             semanticScore,
             rrfScore,
@@ -109,6 +115,7 @@ object PostgresEmbeddingsRepository:
           contextId = contextId,
           documentId = documentId,
           fragmentIndex = fragmentIndex,
+          matchedFragmentIndex = matchedFragmentIndex,
           value = embedding.flattenTo(Vector),
           fullTextScore = fullTextScore,
           semanticScore = semanticScore,
@@ -136,6 +143,8 @@ object PostgresEmbeddingsRepository:
       full_text_search AS (
         SELECT
           id,
+          fragment_index,
+          document_id,
           paradedb.score(id) AS full_text_score
         FROM embeddings
         WHERE
@@ -147,6 +156,8 @@ object PostgresEmbeddingsRepository:
       full_text_search_ranked AS (
         SELECT
           id,
+          fragment_index,
+          document_id,
           full_text_score,
           RANK() OVER (ORDER BY full_text_score DESC) AS rank
         FROM full_text_search
@@ -154,6 +165,8 @@ object PostgresEmbeddingsRepository:
       semantic_search AS (
         SELECT
           id,
+          fragment_index,
+          document_id,
           embedding <=> $_float4::vector AS semantic_score
         FROM embeddings
         WHERE
@@ -164,13 +177,19 @@ object PostgresEmbeddingsRepository:
       semantic_search_ranked AS (
         SELECT
           id,
+          fragment_index,
+          document_id,
           semantic_score,
           RANK() OVER (ORDER BY semantic_score) AS rank
         FROM semantic_search
       ),
       matched AS (
         SELECT
+          COALESCE(semantic_search_ranked.fragment_index, full_text_search_ranked.fragment_index) AS matched_fragment_index,
+          COALESCE(semantic_search_ranked.document_id, full_text_search_ranked.document_id) AS document_id,
           COALESCE(semantic_search_ranked.id, full_text_search_ranked.id) AS id,
+          COALESCE(full_text_search_ranked.full_text_score, 0,0) AS full_text_score, 
+          COALESCE(semantic_search_ranked.semantic_score, 0,0) AS semantic_score,
           COALESCE(1.0 / (60 + semantic_search_ranked.rank), 0.0) + 
           COALESCE(1.0 / (60 + full_text_search_ranked.rank), 0.0) AS rrf_score
         FROM semantic_search_ranked
@@ -184,16 +203,17 @@ object PostgresEmbeddingsRepository:
         ORDER BY document_id, matched_fragment_index, rrf_score
       )
     SELECT DISTINCT ON (document_id, fragment_index)
-      context_id,
-      document_id,
+      ae.context_id AS context_id,
+      ae.document_id AS document_id,
       ae.fragment_index AS fragment_index,
       ae.chunk_index AS chunk_index,
       ae.value AS value,
-      ae.metadata as metadata,
-      ae.embedding,
-      full_text_score,
-      semantic_score,
-      rrf_score
+      ae.metadata AS metadata,
+      CAST(ae.embedding AS FLOAT4[]) AS embedding,
+      e.matched_fragment_index AS matched_fragment_index,
+      e.full_text_score AS full_text_score,
+      e.semantic_score AS semantic_score,
+      e.rrf_score AS rrf_score
     FROM matched_deduped AS e
     INNER JOIN embeddings AS ae
     ON ae.id = e.id
