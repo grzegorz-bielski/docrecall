@@ -68,7 +68,7 @@ final class PostgresEmbeddingsRepository(using Logger[IO]):
     val args =
       (
         embedding.contextId,
-        escapeSingleQuite(embedding.chunk.text),
+        StringEscapeUtils.toTantivySearchString(embedding.chunk.text),
         settings.fullTextSearchLimit,
         Arr(embedding.value*),
         embedding.contextId,
@@ -81,11 +81,6 @@ final class PostgresEmbeddingsRepository(using Logger[IO]):
     Stream
       .eval(session.prepare(retrieveQuery))
       .flatMap(_.stream(args = args, chunkSize = 1024))
-
-
-  // TODO: it doesn't work... 
-  // ParseError(SyntaxError("value:(What''s Jack OS API ?)"), "value:(What''s Jack OS API ?)").
-  private def escapeSingleQuite(str: String) = str.replace("'", "''")
 
 object PostgresEmbeddingsRepository:
   def of: IO[PostgresEmbeddingsRepository] =
@@ -122,21 +117,6 @@ object PostgresEmbeddingsRepository:
           rrfScore = rrfScore,
         )
 
-  // see: https://docs.paradedb.com/documentation/guides/hybrid
-
-  // TODO: (1 - <=>) ???
-  // https://github.com/pgvector/pgvector
-  // https://github.com/supabase/supabase/issues/12244
-//   select id, cosine_distance, cosine_sim, RANK() OVER (ORDER BY cosine_distance DESC) AS rank from (
-// select
-// id,
-// embedding <=> array_fill(0.1, ARRAY[1024])::vector as cosine_distance,
-// 1 - (embedding <=> array_fill(0.1, ARRAY[1024])::vector) as cosine_sim
-// FROM embeddings
-// order by embedding <=> array_fill(0.1, ARRAY[1024])::vector
-// LIMIT 10
-// )
-
   private lazy val retrieveQuery =
     sql"""
     WITH
@@ -171,7 +151,7 @@ object PostgresEmbeddingsRepository:
         FROM embeddings
         WHERE
           context_id = ${ContextId.pgCodec}
-        ORDER BY semantic_score
+        ORDER BY semantic_score ASC
         LIMIT $int4
       ),
       semantic_search_ranked AS (
