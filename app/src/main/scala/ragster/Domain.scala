@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 
 import java.util.UUID
 import cats.effect.*

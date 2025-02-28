@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 package rag
 package ingestion
 
@@ -9,8 +9,8 @@ import org.typelevel.log4cats.syntax.*
 import org.typelevel.log4cats.slf4j.*
 import org.typelevel.log4cats.*
 import skunk.*
-import ragster.rag.vectorstore.*
-import ragster.postgres.*
+import docrecall.rag.vectorstore.*
+import docrecall.postgres.*
 
 trait IngestionService[F[_]]:
   def ingest(input: IngestionService.Input): F[Document.Ingested]

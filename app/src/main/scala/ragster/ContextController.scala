@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 
 import fs2.{Chunk as _, *}
 import fs2.io.*
@@ -20,11 +20,11 @@ import skunk.*
 import scala.concurrent.duration.{span as _, *}
 import java.util.UUID
 
-import ragster.chat.*
-import ragster.rag.vectorstore.*
-import ragster.rag.*
-import ragster.rag.ingestion.*
-import ragster.postgres.*
+import docrecall.chat.*
+import docrecall.rag.vectorstore.*
+import docrecall.rag.*
+import docrecall.rag.ingestion.*
+import docrecall.postgres.*
 
 final class ContextController(using
   sessionResource: SessionResource,

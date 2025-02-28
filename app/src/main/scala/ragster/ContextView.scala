@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 
 import cats.effect.*
 import cats.syntax.all.*
@@ -6,10 +6,10 @@ import org.http4s.{scalatags as _, h2 as _, *}
 import scalatags.Text.all.*
 import scalatags.Text.tags2.{progress, details, summary}
 
-import ragster.chat.*
-import ragster.rag.*
-import ragster.common.*
-import ragster.viewpartials.*
+import docrecall.chat.*
+import docrecall.rag.*
+import docrecall.common.*
+import docrecall.viewpartials.*
 
 object ContextView extends HtmxView:
   private val uploadedFilesListId = "uploaded-files-list"

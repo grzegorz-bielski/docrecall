@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 package chat
 
 import org.http4s.FormDataDecoder

@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 
 import scalatags.Text.all.*
 import scalatags.Text.tags2.{title as headTitle, details, summary}
@@ -7,7 +7,7 @@ object RootLayoutView extends HtmxView:
   def view(children: scalatags.Text.Modifier*)(using AppConfig) =
     val headContent =
       Vector(
-        headTitle("ragster"),
+        headTitle("docrecall"),
         meta(charset  := "UTF-8"),
         meta(
           name        := "viewport",
@@ -55,5 +55,5 @@ object RootLayoutView extends HtmxView:
   lazy val navbar =
     div(
       cls := "navbar bg-base-100",
-      div(cls := "flex-1", appLink("/", "ragster 🤖", cls := "btn btn-ghost text-xl")),
+      div(cls := "flex-1", appLink("/", "docrecall 🤖", cls := "btn btn-ghost text-xl")),
     )

@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 
 import java.util.UUID
 import cats.effect.IO
@@ -8,7 +8,7 @@ import skunk.codec.all.*
 import skunk.*
 import cats.instances.bigInt
 
-import ragster.common.SkunkJson.*
+import docrecall.common.SkunkJson.*
 
 opaque type DocumentName <: String = String
 object DocumentName:

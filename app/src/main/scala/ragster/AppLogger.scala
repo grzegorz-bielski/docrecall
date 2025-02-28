@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 
 import cats.syntax.all.*
 import cats.effect.*

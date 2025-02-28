@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 
 import cats.effect.*
 import java.util.UUID
@@ -13,7 +13,7 @@ import org.http4s.QueryParamDecoder
 import io.scalaland.chimney.dsl.*
 import io.scalaland.chimney.*
 
-import ragster.common.*
+import docrecall.common.*
 
 import ContextInfo.given
 

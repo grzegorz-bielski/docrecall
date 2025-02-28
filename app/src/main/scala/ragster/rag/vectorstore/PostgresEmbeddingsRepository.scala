@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 package rag
 package vectorstore
 
@@ -16,7 +16,7 @@ import skunk.data.*
 import skunk.codec.all.*
 import skunk.syntax.all.*
 
-import ragster.postgres.*
+import docrecall.postgres.*
 
 final class PostgresEmbeddingsRepository(using Logger[IO]):
   import PostgresEmbeddingsRepository.*

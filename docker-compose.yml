@@ -1,5 +1,5 @@
 version: '3.8'
-name: ragster-stack
+name: docrecall-stack
 services:
 
   # https://docs.paradedb.com/documentation/getting-started/quickstart
@@ -12,7 +12,7 @@ services:
     environment:
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=ragster
+      - POSTGRES_DB=docrecall
     volumes:
       - paradedb_data:/var/lib/postgresql/data/
 

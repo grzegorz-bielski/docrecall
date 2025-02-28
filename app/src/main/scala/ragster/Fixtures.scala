@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 
 import cats.syntax.all.*
 import cats.effect.syntax.all.*
@@ -7,10 +7,10 @@ import java.util.UUID
 import fs2.io.file.{Files, Path, Flags}
 import skunk.*
 
-import ragster.rag.*
-import ragster.rag.ingestion.*
-import ragster.rag.vectorstore.*
-import ragster.postgres.*
+import docrecall.rag.*
+import docrecall.rag.ingestion.*
+import docrecall.rag.vectorstore.*
+import docrecall.postgres.*
 
 // dev only test data
 object Fixtures:

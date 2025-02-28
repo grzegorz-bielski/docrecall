@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 package integrations
 package slack
 
@@ -13,8 +13,8 @@ import org.typelevel.log4cats.syntax.*
 import scala.util.Try
 import skunk.*
 
-import ragster.chat.*
-import ragster.postgres.*
+import docrecall.chat.*
+import docrecall.postgres.*
 
 import ChatService.*
 import SlackCommandsServiceImpl.*

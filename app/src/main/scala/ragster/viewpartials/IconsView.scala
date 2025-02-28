@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 package viewpartials
 
 import scalatags.Text.all.{cls, aria}

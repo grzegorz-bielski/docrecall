@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 
 import java.util.UUID
 import cats.effect.*
@@ -11,14 +11,14 @@ import org.typelevel.log4cats.syntax.*
 import unindent.*
 import java.util.UUID
 import java.time.*
-import ragster.common.SkunkJson.*
+import docrecall.common.SkunkJson.*
 import scala.util.Try
 import scala.util.control.NoStackTrace
 import skunk.*
 import skunk.codec.all.*
 import skunk.syntax.all.*
 
-import ragster.postgres.*
+import docrecall.postgres.*
 
 import PostgresContextRepository.*
 import ContextInfo.given

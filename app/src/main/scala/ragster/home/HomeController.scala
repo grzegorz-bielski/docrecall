@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 package home
 
 import org.http4s.{scalatags as _, h2 as _, *}
@@ -37,7 +37,7 @@ object HomeView extends HtmxView:
             cls  := "py-9",
             p(
               cls := "py-2",
-              "ragster is your team's private assistant that can help you automate mundane tasks.",
+              "docrecall is your team's private assistant that can help you automate mundane tasks.",
             ),
             p(
               cls := "py-2",

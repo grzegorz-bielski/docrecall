@@ -4,7 +4,7 @@ app-dev:
     export ENV=Local
     (
         trap 'kill 0' SIGINT; 
-        scala-cli run . --restart --main-class ragster.Ragster & 
+        scala-cli run . --restart --main-class docrecall.DocRecall & 
         npm run tailwind:watch --workspace app &
         npm run esbuild:watch --workspace app
     )
@@ -31,4 +31,4 @@ test-only filter:
     scala-cli test . --test-only "{{filter}}"
 
 inference-bb engine model:
-    scala-cli run . --main-class ragster.bench.InferenceBB -- {{engine}} {{model}}
+    scala-cli run . --main-class docrecall.bench.InferenceBB -- {{engine}} {{model}}

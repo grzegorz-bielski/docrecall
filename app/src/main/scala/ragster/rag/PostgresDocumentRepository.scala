@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 package rag
 
 import java.util.UUID
@@ -17,8 +17,8 @@ import skunk.*
 import skunk.codec.all.*
 import skunk.syntax.all.*
 
-import ragster.common.SkunkJson.*
-import ragster.postgres.*
+import docrecall.common.SkunkJson.*
+import docrecall.postgres.*
 
 import PostgresDocumentRepository.*
 

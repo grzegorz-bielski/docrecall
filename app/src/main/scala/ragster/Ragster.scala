@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 
 import cats.syntax.all.*
 import cats.effect.syntax.all.*
@@ -8,16 +8,16 @@ import org.typelevel.log4cats.slf4j.*
 import org.typelevel.log4cats.syntax.*
 import skunk.*
 
-import ragster.rag.*
-import ragster.rag.ingestion.*
-import ragster.rag.vectorstore.*
-import ragster.home.*
-import ragster.postgres.*
-import ragster.chat.*
-import ragster.integrations.slack.*
-import ragster.inference.*
+import docrecall.rag.*
+import docrecall.rag.ingestion.*
+import docrecall.rag.vectorstore.*
+import docrecall.home.*
+import docrecall.postgres.*
+import docrecall.chat.*
+import docrecall.integrations.slack.*
+import docrecall.inference.*
 
-object Ragster extends ResourceApp.Forever:
+object DocRecall extends ResourceApp.Forever:
   def run(args: List[String]): Resource[IO, Unit] =
     for
       given AppConfig   <- AppConfig.load.toResource
@@ -47,7 +47,7 @@ object Ragster extends ResourceApp.Forever:
       // _ <- runInitialHealthChecks().toResource
 
       // state-changing side effects (!)
-      _ <- ragster.Migrations.run.toResource
+      _ <- docrecall.Migrations.run.toResource
       _ <- Fixtures.loadFixtures().toResource
       // _ <- summon[ContextRepository[IO]].get(ContextId(java.util.UUID.randomUUID())).toResource
 

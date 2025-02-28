@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 package rag
 
 import com.github.plokhotnyuk.jsoniter_scala.core.*

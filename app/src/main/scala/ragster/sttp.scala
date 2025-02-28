@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 
 import cats.effect.*
 import sttp.capabilities.fs2.Fs2Streams

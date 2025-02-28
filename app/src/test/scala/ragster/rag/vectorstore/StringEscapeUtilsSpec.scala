@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 package rag
 package vectorstore
 

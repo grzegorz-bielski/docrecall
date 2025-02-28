@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 
 /** Represents a LLM model
   *

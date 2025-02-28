@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 
 import cats.effect.*
 import cats.syntax.all.*
@@ -16,7 +16,7 @@ object Migrations:
           port = 5432,
           user = "user",
           password = "password".some,
-          database = "ragster",
+          database = "docrecall",
           ssl = ConnectionConfig.SSL.None,
         ),
       )

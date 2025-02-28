@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 package chat
 
 import fs2.{Chunk as _, io as _, *}
@@ -15,9 +15,9 @@ import io.scalaland.chimney.*
 import java.util.UUID
 import java.time.Duration
 
-import ragster.rag.vectorstore.*
-import ragster.rag.*
-import ragster.postgres.*
+import docrecall.rag.vectorstore.*
+import docrecall.rag.*
+import docrecall.postgres.*
 
 trait ChatService[F[_]]:
   /** Starts the query processing, which usually runs in the background.

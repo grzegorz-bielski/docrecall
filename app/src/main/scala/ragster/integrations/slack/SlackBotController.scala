@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 package integrations
 package slack
 
@@ -10,7 +10,7 @@ import org.typelevel.log4cats.*
 import org.typelevel.log4cats.slf4j.*
 import org.typelevel.log4cats.syntax.*
 
-import ragster.common.{*, given}
+import docrecall.common.{*, given}
 
 final class SlackBotController(
   signingSecret: String,

@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 package integrations
 package slack
 
@@ -6,7 +6,7 @@ import com.github.plokhotnyuk.jsoniter_scala.core.*
 import com.github.plokhotnyuk.jsoniter_scala.macros.*
 import unindent.*
 
-import ragster.common.*
+import docrecall.common.*
 
 given JsonEncoder[Block.Text] =
   case Block.Text.Markdown(text) => i"""{"type": "mrkdwn", "text": "${text}"}"""

@@ -1,12 +1,12 @@
-package ragster
+package docrecall
 package inference
 
 import cats.effect.*
 import sttp.openai.OpenAI
 import sttp.model.Uri.*
 
-import ragster.chat.*
-import ragster.rag.*
+import docrecall.chat.*
+import docrecall.rag.*
 
 trait InferenceModule[F[_]]:
   def chatCompletionService: ChatCompletionService[F]

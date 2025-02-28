@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 package chat
 
 import cats.syntax.all.*

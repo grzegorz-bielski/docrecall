@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 
 import scalatags.Text.Modifier
 import scalatags.Text.all.*

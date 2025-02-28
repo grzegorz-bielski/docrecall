@@ -1,4 +1,4 @@
-package ragster
+package docrecall
 package integrations
 package slack
 
@@ -13,8 +13,8 @@ import org.typelevel.log4cats.noop.NoOpLogger
 import org.typelevel.log4cats.*
 import scala.concurrent.duration.*
 
-import ragster.chat.*
-import ragster.chat.ChatService.Input
+import docrecall.chat.*
+import docrecall.chat.ChatService.Input
 
 import SlackCommandsServiceImpl.*
 
