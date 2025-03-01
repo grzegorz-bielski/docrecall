@@ -30,18 +30,6 @@ final class PostgresDocumentRepository(using Logger[IO]):
           selectDocumentFragment.query(documentInfoCodec)
         .map(_.toVector)
 
-  // TODO: not used + name is not unique, there could be multiple results
-  // def get(contextId: ContextId, name: DocumentName)(using session: Session[IO]): IO[Option[Document.Info]] =
-  //   session
-  //     .prepare:
-  //       sql"""
-  //       $selectDocumentFragment
-  //       WHERE context_id = ${ContextId.pgCodec}
-  //       AND name = $text
-  //       """
-  //       .query(documentInfoCodec)
-  //     .flatMap(_.option((contextId, name)))
-
   def createOrUpdate(document: Document.Info)(using session: Session[IO]): IO[Unit] =
       session
         .prepare:
@@ -66,7 +54,7 @@ final class PostgresDocumentRepository(using Logger[IO]):
   def delete(id: DocumentId)(using session: Session[IO]): IO[Unit] =
     session
       .prepare:
-        sql"""DELETE FROM contexts WHERE id = ${DocumentId.pgCodec}""".command
+        sql"""DELETE FROM documents WHERE id = ${DocumentId.pgCodec}""".command
       .flatMap(_.execute(id))
       .void
 

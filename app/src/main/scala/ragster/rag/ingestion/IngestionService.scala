@@ -20,6 +20,7 @@ object IngestionService:
   final case class Input(
     contextId: ContextId,
     documentName: DocumentName,
+    documentId: Option[DocumentId] = None,
     embeddingsModel: Model,
     content: Stream[IO, Byte],
   )
@@ -44,12 +45,10 @@ final class PostgresIngestionService(using
 
     sessionResource.useGiven: (session: Session[IO]) ?=>
       for
-        documentId      <- DocumentId.of
+        documentId <- input.documentId.fold(DocumentId.of)(IO.pure)
 
-        _documentFragments <- LangChain4jIngestion.loadFrom(content, maxTokens = embeddingsModel.contextLength)
-        // TODO: temp
-        documentFragments   = _documentFragments.take(2)
-        _                  <- info"Document $documentId: loaded ${documentFragments.size} fragments from the document."
+        documentFragments <- LangChain4jIngestion.loadFrom(content, maxTokens = embeddingsModel.contextLength)
+        _                 <- info"Document $documentId: loaded ${documentFragments.size} fragments from the document."
 
         documentInfo = Document.Info(
                          id = documentId,

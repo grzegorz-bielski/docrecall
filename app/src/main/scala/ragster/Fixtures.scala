@@ -39,9 +39,9 @@ object Fixtures:
     documentRepository: PostgresDocumentRepository,
   )(using Session[IO]) =
     // hardcoded
-    val contextId       = ContextId(UUID.fromString("f47b3b3e-0b3b-4b3b-8b3b-3b3b3b3b3b3b"))
-    val documentId      = DocumentId(UUID.fromString("f47b3b3e-0b3b-4b3b-8b3b-3b3b3b3b3b3b"))
-    val documentName    = DocumentName(path.fileName.toString)
+    val contextId    = ContextId(UUID.fromString("f47b3b3e-0b3b-4b3b-8b3b-3b3b3b3b3b3b"))
+    val documentId   = DocumentId(UUID.fromString("f47b3b3e-0b3b-4b3b-8b3b-3b3b3b3b3b3b"))
+    val documentName = DocumentName(path.fileName.toString)
 
     vectorStore
       .documentEmbeddingsExists(contextId, documentId)
@@ -63,6 +63,7 @@ object Fixtures:
                           IngestionService.Input(
                             contextId = contextId,
                             documentName = documentName,
+                            documentId = documentId.some,
                             embeddingsModel = Model.defaultEmbeddingsModel,
                             content = fileContent,
                           ),
