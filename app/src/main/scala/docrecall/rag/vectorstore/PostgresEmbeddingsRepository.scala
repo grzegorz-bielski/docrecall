@@ -125,6 +125,7 @@ object PostgresEmbeddingsRepository:
           id,
           fragment_index,
           document_id,
+          context_id,
           paradedb.score(id) AS full_text_score
         FROM embeddings
         WHERE
@@ -138,6 +139,7 @@ object PostgresEmbeddingsRepository:
           id,
           fragment_index,
           document_id,
+          context_id,
           full_text_score,
           RANK() OVER (ORDER BY full_text_score DESC) AS rank
         FROM full_text_search
@@ -147,6 +149,7 @@ object PostgresEmbeddingsRepository:
           id,
           fragment_index,
           document_id,
+          context_id,
           embedding <=> $_float4::vector AS semantic_score
         FROM embeddings
         WHERE
@@ -159,6 +162,7 @@ object PostgresEmbeddingsRepository:
           id,
           fragment_index,
           document_id,
+          context_id,
           semantic_score,
           RANK() OVER (ORDER BY semantic_score) AS rank
         FROM semantic_search
@@ -167,6 +171,7 @@ object PostgresEmbeddingsRepository:
         SELECT
           COALESCE(semantic_search_ranked.fragment_index, full_text_search_ranked.fragment_index) AS matched_fragment_index,
           COALESCE(semantic_search_ranked.document_id, full_text_search_ranked.document_id) AS document_id,
+          COALESCE(semantic_search_ranked.context_id, full_text_search_ranked.context_id) AS context_id,
           COALESCE(semantic_search_ranked.id, full_text_search_ranked.id) AS id,
           COALESCE(full_text_search_ranked.full_text_score, 0,0) AS full_text_score, 
           COALESCE(semantic_search_ranked.semantic_score, 0,0) AS semantic_score,
@@ -195,8 +200,8 @@ object PostgresEmbeddingsRepository:
       e.semantic_score AS semantic_score,
       e.rrf_score AS rrf_score
     FROM matched_deduped AS e
-    INNER JOIN embeddings AS ae
-    ON ae.id = e.id
+    LEFT JOIN embeddings AS ae
+    USING (context_id, document_id)
     WHERE fragment_index 
       BETWEEN matched_fragment_index - $int4 AND matched_fragment_index + $int4
     ORDER BY document_id, fragment_index, chunk_index
