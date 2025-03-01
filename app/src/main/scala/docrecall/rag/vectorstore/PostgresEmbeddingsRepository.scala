@@ -67,9 +67,9 @@ final class PostgresEmbeddingsRepository(using Logger[IO]):
   ): Stream[IO, Embedding.Retrieved] =
     val args =
       (
-        embedding.contextId,
         StringEscapeUtils.toTantivySearchString(embedding.chunk.text),
         settings.fullTextSearchLimit,
+        embedding.contextId,
         Arr(embedding.value*),
         embedding.contextId,
         settings.semanticSearchLimit,
@@ -79,7 +79,7 @@ final class PostgresEmbeddingsRepository(using Logger[IO]):
       )
 
     Stream
-      .eval(session.prepare(retrieveQuery))
+      .eval(session.prepare(retrieveHybridQuery))
       .flatMap(_.stream(args = args, chunkSize = 1024))
 
 object PostgresEmbeddingsRepository:
@@ -117,7 +117,13 @@ object PostgresEmbeddingsRepository:
           rrfScore = rrfScore,
         )
 
-  private lazy val retrieveQuery =
+  // TODO: `full_text_search_from_ctx` is a workaround
+  // filtering on context_id in the full text search with @@@ breaks the scoring function, so we need another CTE
+  // waiting for https://github.com/paradedb/paradedb/pull/2197 to be published
+
+  // TODO: BM25 scores are for whole embeddings table, which is shared between contexts
+  // should we create a separate embeddings table for each context?
+  private lazy val retrieveHybridQuery =
     sql"""
     WITH
       full_text_search AS (
@@ -129,10 +135,12 @@ object PostgresEmbeddingsRepository:
           paradedb.score(id) AS full_text_score
         FROM embeddings
         WHERE
-          context_id = ${ContextId.pgCodec} AND
-          value @@@ $text
+          id @@@ paradedb.match('value', $text)
         ORDER BY full_text_score DESC
         LIMIT $int4
+      ),
+      full_text_search_from_ctx AS (
+        SELECT * FROM full_text_search WHERE context_id = ${ContextId.pgCodec}
       ),
       full_text_search_ranked AS (
         SELECT
@@ -142,7 +150,7 @@ object PostgresEmbeddingsRepository:
           context_id,
           full_text_score,
           RANK() OVER (ORDER BY full_text_score DESC) AS rank
-        FROM full_text_search
+        FROM full_text_search_from_ctx
       ),
       semantic_search AS (
         SELECT
