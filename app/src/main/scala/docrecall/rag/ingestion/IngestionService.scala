@@ -30,6 +30,7 @@ final class PostgresIngestionService(using
   documentRepository: PostgresDocumentRepository,
   embeddingsService: EmbeddingService[IO],
   vectorStoreRepository: PostgresEmbeddingsRepository,
+  documentTokenizer: DocumentTokenizer[IO],
   logger: Logger[IO],
 ) extends IngestionService[IO]:
   def purge(contextId: ContextId, documentId: DocumentId): IO[Unit] =
@@ -47,7 +48,7 @@ final class PostgresIngestionService(using
       for
         documentId <- input.documentId.fold(DocumentId.of)(IO.pure)
 
-        documentFragments <- LangChain4jIngestion.loadFrom(content, maxTokens = embeddingsModel.contextLength)
+        documentFragments <- documentTokenizer.tokenize(content, maxTokens = embeddingsModel.contextLength)
         _                 <- info"Document $documentId: loaded ${documentFragments.size} fragments from the document."
 
         documentInfo = Document.Info(
@@ -84,5 +85,7 @@ object PostgresIngestionService:
     EmbeddingService[IO],
     PostgresEmbeddingsRepository,
   ): IO[PostgresIngestionService] =
-    for given Logger[IO] <- Slf4jLogger.create[IO]
+    for
+      given Logger[IO]            <- Slf4jLogger.create[IO]
+      given DocumentTokenizer[IO] <- DocumentTokenizer.of
     yield PostgresIngestionService()

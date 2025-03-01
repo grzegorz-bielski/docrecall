@@ -19,6 +19,7 @@ object Document:
     metadata: Metadata,
   )
 
+  // aka Document Token
   final case class Fragment(
     index: Long,
     chunk: Chunk,
