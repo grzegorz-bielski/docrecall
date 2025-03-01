@@ -44,12 +44,9 @@ object DocRecall extends ResourceApp.Forever:
       given SlackCommandsService[IO] <- SlackCommandsService.of
       slackBotController             <- SlackBotController.of
 
-      // _ <- runInitialHealthChecks().toResource
-
       // state-changing side effects (!)
       _ <- docrecall.Migrations.run.toResource
       _ <- Fixtures.loadFixtures().toResource
-      // _ <- summon[ContextRepository[IO]].get(ContextId(java.util.UUID.randomUUID())).toResource
 
       _ <- httpApp(
              controllers = Vector(
@@ -59,16 +56,3 @@ object DocRecall extends ResourceApp.Forever:
              ),
            )
     yield ()
-
-  // private def runInitialHealthChecks()(using clickHouseClient: ClickHouseClient[IO], logger: Logger[IO]) =
-  //   val healthChecks = Vector(
-  //     "ClickHouse" -> clickHouseClient.healthCheck,
-  //   )
-
-  //   healthChecks
-  //     .traverse: (name, check) =>
-  //       check.attempt.flatMap:
-  //         case Right(_) => info"$name is healthy"
-  //         case Left(e)  =>
-  //           logger.error(e)(s"$name is unhealthy, check your connection. Stopping the app") *> IO.raiseError(e)
-  //     .void
