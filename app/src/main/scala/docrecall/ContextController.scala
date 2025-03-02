@@ -96,6 +96,11 @@ final class ContextController(using
           val eventStream: EventStream[IO] = chatService
             .subscribeToQueryResponses(queryId)
             .map:
+              case resp @ ChatService.Response.Retrieval(_, metadata) =>
+                ServerSentEvent(
+                  data = ChatView.responseRetrievalChunk(metadata).render.some,
+                  eventType = resp.eventType.toString.some,
+                )
               case resp @ ChatService.Response.Partial(_, content) =>
                 ServerSentEvent(
                   data = ChatView.responseChunk(content).render.some,
@@ -137,8 +142,10 @@ final class ContextController(using
                   queryId = queryId,
                   query = query,
                   sseUrl = s"/$prefix/${context.id}/chat/responses?queryId=$queryId",
-                  queryResponseEvent = ChatService.ResponseType.Partial.toString,
                   queryCloseEvent = ChatService.ResponseType.Finished.toString,
+                  queryResponseEvent = 
+                    ChatService.ResponseType.Partial.toString,
+                    ChatService.ResponseType.Retrieval.toString,
                 ),
               )
           yield res

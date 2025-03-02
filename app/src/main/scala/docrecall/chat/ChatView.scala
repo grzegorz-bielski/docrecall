@@ -2,6 +2,7 @@ package docrecall
 package chat
 
 import scalatags.Text.all.*
+import scalatags.Text.tags2.article
 import scala.concurrent.duration.{span as _, *}
 
 object ChatView extends HtmxView:
@@ -40,14 +41,14 @@ object ChatView extends HtmxView:
       ),
     )
 
-  def messages() =
+  def messages()                     =
     div(
       cls := "py-5 pr-5 md:h-[calc(100dvh-16rem)] md:overflow-y-scroll",
       id  := messagesViewId,
     )(
       div(
         cls := "chat chat-start",
-        div(cls := "chat-bubble chat-bubble-primary", "Hello, how can I help you?"),
+        div(cls := "chat-bubble", "Hello, how can I help you?"),
       ),
     )
 
@@ -55,21 +56,21 @@ object ChatView extends HtmxView:
     queryId: QueryId,
     query: ChatQuery,
     sseUrl: String,
-    queryResponseEvent: String,
     queryCloseEvent: String,
+    queryResponseEvent: String*,
   ) =
     val chatBubbleId = s"chat-bubble-$queryId"
 
     div(
       div(
         cls           := "chat chat-end",
-        div(cls := "chat-bubble chat-bubble-secondary", query.content),
+        div(cls := "chat-bubble chat-bubble-primary", query.content),
       ),
       div(
         id            := eventSourceListenerId,
         `hx-ext`      := "sse",
         `sse-connect` := sseUrl,
-        `sse-swap`    := queryResponseEvent,
+        `sse-swap`    := queryResponseEvent.mkString(","),
         `sse-close`   := queryCloseEvent,
         `hx-swap`     := "beforeend scroll:bottom",
         `hx-target`   := s"#$chatBubbleId",
@@ -77,7 +78,7 @@ object ChatView extends HtmxView:
       div(
         cls           := "chat chat-start",
         div(
-          cls := "chat-bubble chat-bubble-primary",
+          cls := "chat-bubble",
           id  := chatBubbleId,
         )(),
       ),
@@ -88,6 +89,62 @@ object ChatView extends HtmxView:
     // sse-close is not always enough
     div(id := eventSourceListenerId, `hx-swap-oob` := "true")
 
+  def responseRetrievalChunk(
+    metadata: RetrievalMetadata,
+  ) =
+    div(
+      cls := "pb-5",
+      h3(
+        // cls := "",
+        "Document fragments:",
+      ),
+      ul(
+        metadata.retrievedEmbeddings.toVector.map: (docId, retrieved) =>
+          li(
+            cls := "py-2",
+            div(
+              cls := "bg-base-200 collapse",
+              input(`type` := "checkbox", cls := "peer w-full h-full"),
+              article(
+                cls        := "collapse-title bg-primary text-primary-content peer-checked:bg-base-200",
+                docId.toString,
+              ),
+              ul(
+                cls        := "collapse-content bg-primary text-primary-content peer-checked:bg-base-200",
+                retrieved.map: embedding =>
+                  li(
+                    cls := "text-sm tracking-widest",
+                    div(cls := "divider"),
+                    p(
+                      span(cls := "font-bold", "Index: "),
+                      span(embedding.fragmentIndex.toString),
+                    ),
+                    p(
+                      span(cls := "font-bold", "Matched Index: "),
+                      span(embedding.matchedFragmentIndex.toString),
+                    ),
+                    p(
+                      span(cls := "font-bold", "RRF Score: "),
+                      span(embedding.rrfScore.toString),
+                    ),
+                    p(
+                      span(cls := "font-bold", "Semantic Score: "),
+                      span(embedding.semanticScore.toString),
+                    ),
+                    p(
+                      span(cls := "font-bold", "Full Text Score: "),
+                      span(embedding.fullTextScore.toString),
+                    ),
+                    p(
+                      span(cls := "font-bold", "Chunk: "),
+                      span(sanitizeChunk(embedding.chunk.text)),
+                    ),
+                  ),
+              ),
+            ),
+          ),
+      ),
+    )
   def responseChunk(content: String) =
     span(sanitizeChunk(content))
 

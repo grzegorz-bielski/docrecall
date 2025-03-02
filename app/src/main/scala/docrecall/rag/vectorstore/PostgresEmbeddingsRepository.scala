@@ -122,7 +122,10 @@ object PostgresEmbeddingsRepository:
   // waiting for https://github.com/paradedb/paradedb/pull/2197 to be published
 
   // TODO: BM25 scores are for whole embeddings table, which is shared between contexts
-  // should we create a separate embeddings table for each context?
+  // should we create a separate embeddings table for each context? -- prolly a bad idea
+  // table partitioning, partial indexes?
+  // related: https://news.ycombinator.com/item?id=41174792
+  // let's not worry about this now...
   private lazy val retrieveHybridQuery =
     sql"""
     WITH

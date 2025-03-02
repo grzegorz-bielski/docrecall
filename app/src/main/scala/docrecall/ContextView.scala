@@ -375,7 +375,7 @@ object ContextView extends HtmxView:
             summary(
               cls := Vector(
                 "p-4 cursor-pointer rounded-lg",
-                "hover:bg-base-300 active:bg-base-400 focus:bg-base-400 outline-none transition-colors",
+                "bg-base-200 hover:bg-base-300 active:bg-base-400 focus:bg-base-400 outline-none transition-colors",
               ).mkString(" "),
               "Files",
               // TODO: add folder icon to the right, right now it breaks the summary marker

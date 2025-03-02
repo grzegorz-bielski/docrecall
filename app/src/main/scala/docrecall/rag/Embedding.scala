@@ -33,9 +33,10 @@ object Embedding:
     *   The cosine distance from the dense embeddings vector search. 0 - Exact match, 1 - No correlation, 2 - Opposite
     *   correlation. `Cosine Distance` = 1 — `Cosine Similarity`
     * @param fullTextScore
-    *   The BM25 score of the match from the full text search.
+    *   The BM25 score of the match from the full text search. The bigger the score, the more relevant the document is
+    *   to the query.
     * @param rrfScore
-    *   The RRF hybrid score of the match
+    *   The RRF hybrid score of the match.
     */
   final case class Retrieved(
     chunk: Chunk,
@@ -47,7 +48,21 @@ object Embedding:
     semanticScore: Double,
     fullTextScore: Float,
     rrfScore: BigDecimal,
-  )
+  ):
+    override def toString: String =
+      i"""
+      Retrieved(
+        chunk: $chunk,
+        value: <Float32, ${value.size}>,
+        documentId: $documentId,
+        contextId: $contextId,
+        fragmentIndex: $fragmentIndex,
+        matchedFragmentIndex: $matchedFragmentIndex,
+        semanticScore: $semanticScore,
+        fullTextScore: $fullTextScore,
+        rrfScore: $rrfScore,
+      )
+      """
 
   /** Embedding from the user query
     */

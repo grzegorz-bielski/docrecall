@@ -75,10 +75,12 @@ object ChatService:
     def queryId: QueryId
 
   enum ResponseType:
-    case Partial, Finished
+    case Partial, Retrieval, Finished
 
   enum Response(val eventType: ResponseType) extends WithQueryId:
     case Partial(queryId: QueryId, content: String) extends Response(ResponseType.Partial)
+
+    case Retrieval(queryId: QueryId, metadata: RetrievalMetadata) extends Response(ResponseType.Retrieval)
 
     case Finished(queryId: QueryId) extends Response(ResponseType.Finished)
 
@@ -138,29 +140,37 @@ final class ChatServiceImpl(
                              )
       retrievedEmbeddings <- retrieveEmbeddings(queryEmbeddings, retrievalSettings).compile.toVector
 
-      // _ <- info"Retrieved embeddings: $retrievedEmbeddings"
-
-      // TODO: group retrieved embeddings by (documentId, version, fragmentIndex) and show them in chat
-
       contextChunks = retrievedEmbeddings.map(_.chunk)
-      _            <- info"Retrieved context: ${contextChunks.map(_.toEmbeddingInput)}"
+      _            <- debug"Retrieved context: ${contextChunks.map(_.toEmbeddingInput)}"
 
       prompt =
         Prompt(
           query = query.content,
+          // TODO: move it into a tool
           queryContext = contextChunks.map(_.toEmbeddingInput).mkString("\n").some,
           template = promptTemplate,
         )
 
-      _ <- chatCompletionService
-             .chatCompletion(prompt, model = chatModel)
-             .map: chatMsg =>
-               Response.Partial(
-                 queryId = queryId,
-                 content = chatMsg.contentDeltas,
-               )
-             .onComplete:
-               Stream(Response.Finished(queryId = queryId))
+      metadataStream = Stream
+                         .emit(
+                           Response.Retrieval(
+                             queryId = queryId,
+                             metadata = RetrievalMetadata.of(retrievedEmbeddings),
+                           ),
+                         )
+                         .covary[IO]
+
+      chatResponseStream = chatCompletionService
+                             .chatCompletion(prompt, model = chatModel)
+                             .map: chatMsg =>
+                               Response.Partial(
+                                 queryId = queryId,
+                                 content = chatMsg.contentDeltas,
+                               )
+                             .onComplete:
+                               Stream(Response.Finished(queryId = queryId))
+
+      _ <- (metadataStream ++ chatResponseStream)
              .evalTap: chatMsg =>
                debug"Received chat message: $chatMsg"
              .evalTap(pubSub.publish)
