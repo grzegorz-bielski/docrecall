@@ -30,7 +30,7 @@ object RootLayoutView extends HtmxView:
         lang          := "en",
         head(headContent*),
         body(
-          cls := "px-4 py-2 min-h-screen mx-auto max-w-screen-2xl",
+          cls := "px-4 py-2 min-h-screen mx-auto max-w-(--breakpoint-2xl)",
         )(
           navbar,
           children,

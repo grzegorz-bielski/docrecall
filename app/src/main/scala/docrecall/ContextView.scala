@@ -105,7 +105,7 @@ object ContextView extends HtmxView:
               ),
               ul(
                 tabindex := "0",
-                cls      := "menu join join-vertical dropdown-content bg-base-100 rounded-box z-[1] mt-1 w-52 p-2 shadow",
+                cls      := "menu join join-vertical dropdown-content bg-base-100 rounded-box z-1 mt-1 w-52 p-2 shadow-sm",
                 li(
                   button(
                     cls := "join-item btn btn-disabled btn-sm w-full",
@@ -314,7 +314,7 @@ object ContextView extends HtmxView:
 
     li(
       id  := documentFileId,
-      cls := "group rounded-r-box hover:bg-base-300 focus-within:bg-base-300 outline-none mr-5",
+      cls := "group rounded-r-box hover:bg-base-300 focus-within:bg-base-300 outline-hidden mr-5",
       div(
         cls := "min-h-8 py-2 px-3 text-xs flex gap-3 items-center",
         span(IconsView.documentIcon()),
@@ -375,7 +375,7 @@ object ContextView extends HtmxView:
             summary(
               cls := Vector(
                 "p-4 cursor-pointer rounded-lg",
-                "bg-base-200 hover:bg-base-300 active:bg-base-400 focus:bg-base-400 outline-none transition-colors",
+                "bg-base-200 hover:bg-base-300 active:bg-base-400 focus:bg-base-400 outline-hidden transition-colors",
               ).mkString(" "),
               "Files",
               // TODO: add folder icon to the right, right now it breaks the summary marker
