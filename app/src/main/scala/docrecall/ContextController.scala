@@ -45,19 +45,19 @@ final class ContextController(using
     val documentDeleteUrl = (doc: Document.Info) => s"/$prefix/${doc.contextId}/documents/${doc.id}"
 
     HttpRoutes.of[IO]:
-      case GET -> Root =>
-        sessionResource.useGiven:
-          for
-            contexts <- contextRepository.getAll
-            response <- Ok(
-              ContextView
-                .contextsOverview(
-                  contexts, 
-                  createNewUrl = "/contexts/new",
-                  contextUrl = id => s"/contexts/$id"
-                )
-            )
-          yield response
+      // case GET -> Root =>
+      //   sessionResource.useGiven:
+      //     for
+      //       contexts <- contextRepository.getAll
+      //       response <- Ok(
+      //         ContextView
+      //           .contextsOverview(
+      //             contexts, 
+      //             createNewUrl = "/contexts/new",
+      //             contextUrl = id => s"/contexts/$id"
+      //           )
+      //       )
+      //     yield response
 
       case GET -> Root / "new" =>
         sessionResource.useGiven:
@@ -74,9 +74,12 @@ final class ContextController(using
         sessionResource.useGiven:
           getContextOrNotFound(contextId): contextInfo =>
             for
+              contexts <- contextRepository.getAll
               documents <- documentRepository.getAll(contextInfo.id)
               response  <- Ok(
                             ContextView.view(
+                              contexts = contexts,
+                              contextUrl = id => s"/contexts/$id",
                               contextInfo = contextInfo,
                               uploadUrl = s"/$prefix/${contextInfo.id}/documents/upload",
                               chatPostUrl = s"/$prefix/${contextInfo.id}/chat/query",

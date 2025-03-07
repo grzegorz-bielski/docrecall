@@ -11,7 +11,7 @@ object ChatView extends HtmxView:
 
   def view(chatPostUrl: String) =
     div(
-      cls := "rounded-box pl-5 md:col-span-2 border border-bg-base-200 shadow-xl",
+      cls := "pl-5 md:col-span-2 border-t-2 md:border-l-2 md:border-t-0",
       div(
         h2(
           cls := "text-sm text-center font-bold pt-2 tracking-widest",
@@ -33,7 +33,7 @@ object ChatView extends HtmxView:
     )(
       div(
         input(
-          cls         := "input input-bordered w-full p-5",
+          cls         := "input w-full p-5",
           `type`      := "text",
           name        := "content",
           placeholder := "Type a query to the chatbot",
@@ -43,12 +43,12 @@ object ChatView extends HtmxView:
 
   def messages()                     =
     div(
-      cls := "py-5 pr-5 md:h-[calc(100dvh-16rem)] md:overflow-y-scroll",
+      cls := "py-5 pr-5 md:h-[calc(100dvh-9.7rem)] md:overflow-y-scroll",
       id  := messagesViewId,
     )(
       div(
         cls := "chat chat-start",
-        div(cls := "chat-bubble", "Hello, how can I help you?"),
+        div(cls := "chat-bubble chat-bubble-primary", "Hello, how can I help you?"),
       ),
     )
 
@@ -64,7 +64,7 @@ object ChatView extends HtmxView:
     div(
       div(
         cls           := "chat chat-end",
-        div(cls := "chat-bubble chat-bubble-primary", query.content),
+        div(cls := "chat-bubble chat-bubble-secondary", query.content),
       ),
       div(
         id            := eventSourceListenerId,

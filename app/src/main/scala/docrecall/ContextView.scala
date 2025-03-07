@@ -16,6 +16,8 @@ object ContextView extends HtmxView:
   private val uploadModalId       = "uploadModal"
 
   def view(
+    contexts: Vector[ContextInfo], 
+    contextUrl: ContextId => String,
     contextInfo: ContextInfo,
     chatPostUrl: String,
     contextUpdateUrl: String,
@@ -24,8 +26,10 @@ object ContextView extends HtmxView:
     fileFieldName: String,
     documentDeleteUrl: DocumentDeleteUrl,
   )(using AppConfig) = RootLayoutView.view(
-    div(
-      cls := "grid grid-cols-1 md:grid-cols-5 gap-x-16 mt-4 md:mt-8",
+    contexts = contexts,
+    contextUrl = contextUrl,
+    children = div(
+      cls := "grid grid-cols-1 md:grid-cols-5 gap-x-16",
       div(
         cls := "md:col-span-3",
         configMenu(
@@ -47,86 +51,6 @@ object ContextView extends HtmxView:
       docs.map(ingested => documentItem(documentDeleteUrl)(ingested.info)),
     )
 
-  def contextsOverview(contexts: Vector[ContextInfo], createNewUrl: String, contextUrl: ContextId => String)(using
-    AppConfig,
-  ) =
-    RootLayoutView.view(
-      div(
-        cls := "mx-auto",
-        div(
-          cls := "flex justify-between items-center bg-base-200 p-5 rounded-box my-4 md:my-8",
-          h2(
-            cls := "text-2xl",
-            "Your contexts",
-          ),
-          div(
-            appLink(
-              createNewUrl,
-              cls := "btn btn-primary",
-              "Create new",
-            ),
-          ),
-        ),
-        div(
-          ul(
-            cls := "grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr justify-between",
-            contexts.map(contextCard(_, contextUrl)),
-          ),
-        ),
-      ),
-    )
-
-  private def contextCard(context: ContextInfo, contextUrl: ContextId => String) =
-    val contextCardId = s"context-${context.id}"
-
-    li(
-      cls := "block",
-      id  := contextCardId,
-      div(
-        cls := "card h-full bg-base-100 shadow-lg shadow-xl transition-shadow",
-        div(
-          cls := "card-body",
-          h2(cls := "card-title", context.name),
-          p(context.description),
-          div(
-            cls  := "join mr-0 ml-auto",
-            appLink(
-              path = contextUrl(context.id),
-              child = "Edit",
-              attrs = cls := "btn btn-outline rounded-btn join-item",
-            ),
-            div(
-              cls := "dropdown dropdown-end",
-              div(
-                tabindex := "0",
-                role     := "button",
-                cls      := "btn btn-outline join-item rounded-btn",
-                IconsView.arrowDownIcon(),
-              ),
-              ul(
-                tabindex := "0",
-                cls      := "menu join join-vertical dropdown-content bg-base-100 rounded-box z-1 mt-1 w-52 p-2 shadow-sm",
-                li(
-                  button(
-                    cls := "join-item btn btn-disabled btn-sm w-full",
-                    "Disable",
-                  ),
-                ),
-                li(
-                  button(
-                    cls         := "join-item btn btn-sm btn-error w-full",
-                    `hx-delete` := contextUrl(context.id),
-                    `hx-target` := s"#$contextCardId",
-                    `hx-swap`   := "outerHTML",
-                    "Delete",
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    )
 
   private def configMenu(
     uploadUrl: String,
@@ -137,8 +61,7 @@ object ContextView extends HtmxView:
     documentDeleteUrl: DocumentDeleteUrl,
   ) =
     div(
-      role := "tablist",
-      cls  := "tabs tabs-bordered",
+      cls  := "tabs",
       tab(
         "Knowledge Base",
         knowledgeBase(
@@ -162,17 +85,6 @@ object ContextView extends HtmxView:
           Vector(
             "tab",
             "rounded-box",
-            "min-w-36",
-            "focus:[box-shadow:none]",
-            "border-t-0",
-            "border-x-0",
-            "bg-transparent",
-            "checked:bg-none",
-            "checked:bg-transparent",
-            "checked:hover:bg-transparent",
-            "checked:focus:bg-transparent",
-            "checked:hover:border-current",
-            "checked:focus:border-current",
           )
             .mkString(" "),
         attr("aria-label") := name,
@@ -180,7 +92,7 @@ object ContextView extends HtmxView:
       ),
       div(
         role               := "tabpanel",
-        cls                := "tab-content bg-base-100 pt-2 md:pt-6 md:h-[calc(100dvh-16rem)] overflow-y-scroll",
+        cls                := "tab-content bg-base-100 p-2 md:pt-6 md:h-[calc(100dvh-14rem)]! overflow-y-scroll",
         content,
       ),
     )
@@ -254,7 +166,7 @@ object ContextView extends HtmxView:
     formControl(
       labelValue,
       textarea(
-        cls  := "textarea textarea-bordered w-full h-64",
+        cls  := "textarea w-full h-64",
         name := fieldName,
         value,
       ),
@@ -264,7 +176,7 @@ object ContextView extends HtmxView:
     formControl(
       labelValue,
       input(
-        cls           := "input input-bordered w-full",
+        cls           := "input w-full",
         name          := fieldName,
         attr("value") := value,
       ),
@@ -276,7 +188,7 @@ object ContextView extends HtmxView:
     formControl(
       labelValue,
       select(
-        cls  := "select select-bordered w-full",
+        cls  := "select w-full",
         name := fieldName,
         options.map: op =>
           option(
@@ -295,14 +207,11 @@ object ContextView extends HtmxView:
     )
 
   private def formControl(labelValue: String, input: Modifier) =
-    label(
-      cls := "form-control w-full",
-      div(
-        cls := "label",
-        span(
-          cls := "label-text",
-          labelValue,
-        ),
+    fieldset(
+      cls := "fieldset w-full rounded-box bg-base-200 p-4 rounded-box",
+      legend(
+        cls := "fieldset-legend",
+        labelValue,
       ),
       input,
     )

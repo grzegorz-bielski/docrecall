@@ -8,8 +8,6 @@
         "esbuild:prod": "esbuild ./elements/index.ts --bundle --minify --outfile=./src/main/resources/static/bundle.js"
     },
     "devDependencies": {
-        "@tailwindcss/forms": "^0.5.10",
-        "@tailwindcss/typography": "^0.5.16",
         "daisyui": "^5.0.0",
         "esbuild": "^0.25.0",
         "tailwindcss": "^4.0.10",

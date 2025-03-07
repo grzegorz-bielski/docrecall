@@ -25,15 +25,27 @@ import PostgresDocumentRepository.*
 final class PostgresDocumentRepository(using Logger[IO]):
   // TODO: pagination?
   def getAll(contextId: ContextId)(using session: Session[IO]): IO[Vector[Document.Info]] =
-      session
-        .execute:
-          selectDocumentFragment.query(documentInfoCodec)
-        .map(_.toVector)
+    session
+      .prepare:
+        sql"""
+          SELECT
+            id, 
+            context_id, 
+            name,
+            description, 
+            type,
+            metadata
+          FROM documents
+          WHERE context_id = ${ContextId.pgCodec}
+        """
+          .query(documentInfoCodec)
+      .flatMap:
+        _.stream(contextId, chunkSize = 32).compile.toVector
 
   def createOrUpdate(document: Document.Info)(using session: Session[IO]): IO[Unit] =
-      session
-        .prepare:
-          sql"""
+    session
+      .prepare:
+        sql"""
           INSERT INTO documents (
             id,
             context_id,
@@ -46,9 +58,8 @@ final class PostgresDocumentRepository(using Logger[IO]):
               description = EXCLUDED.description,
               type = EXCLUDED.type,
               metadata = EXCLUDED.metadata
-          """
-          .command
-        .flatMap(_.execute(document))
+          """.command
+      .flatMap(_.execute(document))
       .void
 
   def delete(id: DocumentId)(using session: Session[IO]): IO[Unit] =
@@ -63,17 +74,17 @@ object PostgresDocumentRepository:
     for given Logger[IO] <- Slf4jLogger.create[IO]
     yield PostgresDocumentRepository()
 
-  private lazy val selectDocumentFragment =
-    sql"""
-    SELECT
-      id, 
-      context_id, 
-      name,
-      description, 
-      type,
-      metadata
-    FROM documents
-    """
+  // private lazy val selectDocumentFragment =
+  //   sql"""
+  //   SELECT
+  //     id,
+  //     context_id,
+  //     name,
+  //     description,
+  //     type,
+  //     metadata
+  //   FROM documents
+  //   """
 
   private lazy val documentInfoCodec: Codec[Document.Info] =
     (
