@@ -10,6 +10,7 @@ import skunk.*
 
 import docrecall.rag.*
 import docrecall.rag.ingestion.*
+import docrecall.rag.retrieval.*
 import docrecall.rag.vectorstore.*
 import docrecall.home.*
 import docrecall.postgres.*
@@ -35,7 +36,12 @@ object DocRecall extends ResourceApp.Forever:
       given EmbeddingService[IO]      = inferenceModule.embeddingService
 
       given IngestionService[IO] <- PostgresIngestionService.of.toResource
-      given ChatService[IO]      <- ChatServiceImpl.of()
+      given RetrievalService[IO] <- RetrievalService.of.toResource
+
+      given ContextReadService  <- ContextReadService.of.toResource
+      given ContextWriteService <- ContextWriteService.of.toResource
+
+      given ChatService[IO] <- ChatServiceImpl.of()
 
       contextController <- ContextController.of()
       homeController     = HomeController()

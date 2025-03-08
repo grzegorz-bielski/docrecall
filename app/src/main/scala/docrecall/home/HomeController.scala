@@ -8,14 +8,26 @@ import scalatags.Text.all.*
 import scalatags.Text.TypedTag
 import org.http4s.headers.Location
 import org.http4s.implicits.*
+import org.typelevel.log4cats.*
+import org.typelevel.log4cats.syntax.*
 
-class HomeController(using AppConfig) extends TopLevelHtmxController:
+import docrecall.postgres.*
+
+class HomeController(using
+  logger: Logger[IO],
+  contextWriteService: ContextWriteService,
+  sessionResource: SessionResource,
+  appConfig: AppConfig,
+) extends TopLevelHtmxController:
   def prefix = "/"
   def routes = IO:
     HttpRoutes.of[IO]:
       case GET -> Root =>
-        Response[IO]()
-          .withStatus(Status.Found)
-          .withHeaders(Location(uri"/contexts"))
-          .pure[IO]
-          
+        sessionResource.useGiven:
+          for
+            context <- contextWriteService.defaultContext
+
+            response = Response[IO]()
+                         .withStatus(Status.Found)
+                         .withHeaders(Location(Uri.unsafeFromString(s"/$prefix/${context.id}")))
+          yield response

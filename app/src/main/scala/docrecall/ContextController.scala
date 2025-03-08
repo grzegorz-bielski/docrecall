@@ -29,9 +29,10 @@ import docrecall.postgres.*
 final class ContextController(using
   sessionResource: SessionResource,
   logger: Logger[IO],
-  contextRepository: PostgresContextRepository,
-  documentRepository: PostgresDocumentRepository,
-  ingestionService: IngestionService[IO],
+  contextReadService: ContextReadService,
+  contextWriteService: ContextWriteService,
+  // documentRepository: PostgresDocumentRepository,
+  // ingestionService: IngestionService[IO],
   chatService: ChatService[IO],
   appConfig: AppConfig,
 ) extends TopLevelHtmxController:
@@ -45,179 +46,166 @@ final class ContextController(using
     val documentDeleteUrl = (doc: Document.Info) => s"/$prefix/${doc.contextId}/documents/${doc.id}"
 
     HttpRoutes.of[IO]:
-      // case GET -> Root =>
-      //   sessionResource.useGiven:
-      //     for
-      //       contexts <- contextRepository.getAll
-      //       response <- Ok(
-      //         ContextView
-      //           .contextsOverview(
-      //             contexts, 
-      //             createNewUrl = "/contexts/new",
-      //             contextUrl = id => s"/contexts/$id"
-      //           )
-      //       )
-      //     yield response
+      case GET -> Root =>
+        sessionResource.useGiven:
+          for
+            context <- contextWriteService.defaultContext
+            response = Response[IO]()
+                         .withStatus(Status.Found)
+                         .withHeaders(Location(Uri.unsafeFromString(s"/$prefix/${context.id}")))
+          yield response
 
       case GET -> Root / "new" =>
         sessionResource.useGiven:
           for
-            context <- ContextInfo.default
-            _       <- contextRepository.createOrUpdate(context)
+            context  <- contextWriteService.createContext
             response = Response[IO]()
-                        .withStatus(Status.SeeOther)
-                        .withHeaders(Location(Uri.unsafeFromString(s"/$prefix/${context.id}")))
-          //  .withHeaders(Location(uri"/$prefix/${context.id.toString}")) -- implementation is missing ??
+                         .withStatus(Status.SeeOther)
+                         .withHeaders(Location(Uri.unsafeFromString(s"/$prefix/${context.id}")))
           yield response
 
       case GET -> Root / ContextIdVar(contextId) =>
         sessionResource.useGiven:
           getContextOrNotFound(contextId): contextInfo =>
             for
-              contexts <- contextRepository.getAll
-              documents <- documentRepository.getAll(contextInfo.id)
+              contexts  <- contextReadService.getContexts
+              documents <- contextReadService.getDocuments(contextInfo.id)
               response  <- Ok(
-                            ContextView.view(
-                              contexts = contexts,
-                              contextUrl = id => s"/contexts/$id",
-                              contextInfo = contextInfo,
-                              uploadUrl = s"/$prefix/${contextInfo.id}/documents/upload",
-                              chatPostUrl = s"/$prefix/${contextInfo.id}/chat/query",
-                              contextUpdateUrl = s"/$prefix/${contextInfo.id}/update",
-                              documents = documents,
-                              fileFieldName = fileFieldName,
-                              documentDeleteUrl = documentDeleteUrl,
-                            ),
-                          )
+                             ContextView.view(
+                               contexts = contexts,
+                               contextUrl = id => s"/contexts/$id",
+                               contextInfo = contextInfo,
+                               uploadUrl = s"/$prefix/${contextInfo.id}/documents/upload",
+                               chatPostUrl = s"/$prefix/${contextInfo.id}/chat/query",
+                               contextUpdateUrl = s"/$prefix/${contextInfo.id}/update",
+                               documents = documents,
+                               fileFieldName = fileFieldName,
+                               documentDeleteUrl = documentDeleteUrl,
+                             ),
+                           )
             yield response
 
       case req @ DELETE -> Root / ContextIdVar(contextId) =>
-        purgeContext(contextId) *> Ok()
+        sessionResource.useGiven:
+          contextWriteService.purgeContext(contextId) *> Ok()
 
       case GET -> Root / ContextIdVar(contextId) / "chat" / "responses" :? QueryIdMatcher(queryId) =>
-        getContextOrNotFound(contextId): context =>
-          val eventStream: EventStream[IO] = chatService
-            .subscribeToQueryResponses(queryId)
-            .map:
-              case resp @ ChatService.Response.Retrieval(_, metadata) =>
-                ServerSentEvent(
-                  data = ChatView.responseRetrievalChunk(metadata).render.some,
-                  eventType = resp.eventType.toString.some,
-                )
-              case resp @ ChatService.Response.Partial(_, content) =>
-                ServerSentEvent(
-                  data = ChatView.responseChunk(content).render.some,
-                  eventType = resp.eventType.toString.some,
-                )
-              case resp @ ChatService.Response.Finished(_)         =>
-                ServerSentEvent(
-                  data = ChatView.responseClearEventSourceListener().render.some,
-                  eventType = resp.eventType.toString.some,
-                )
-            .evalTap: msg =>
-              debug"SSE message to send: $msg"
+        sessionResource.useGiven:
+          getContextOrNotFound(contextId): context =>
+            val eventStream: EventStream[IO] = chatService
+              .subscribeToQueryResponses(queryId)
+              .map:
+                case resp @ ChatService.Response.Retrieval(_, metadata) =>
+                  ServerSentEvent(
+                    data = ChatView.responseRetrievalChunk(metadata).render.some,
+                    eventType = resp.eventType.toString.some,
+                  )
+                case resp @ ChatService.Response.Partial(_, content)    =>
+                  ServerSentEvent(
+                    data = ChatView.responseChunk(content).render.some,
+                    eventType = resp.eventType.toString.some,
+                  )
+                case resp @ ChatService.Response.Finished(_)            =>
+                  ServerSentEvent(
+                    data = ChatView.responseClearEventSourceListener().render.some,
+                    eventType = resp.eventType.toString.some,
+                  )
+              .evalTap: msg =>
+                debug"SSE message to send: $msg"
 
-          info"Subscribing to chat responses for queryId: $queryId" *>
-            Ok(eventStream)
+            info"Subscribing to chat responses for queryId: $queryId" *>
+              Ok(eventStream)
 
       case req @ POST -> Root / ContextIdVar(contextId) / "chat" / "query" =>
-        getContextOrNotFound(contextId): context =>
-          for
-            query   <- req.as[ChatQuery]
-            queryId <- QueryId.of
+        sessionResource.useGiven:
+          getContextOrNotFound(contextId): context =>
+            for
+              query   <- req.as[ChatQuery]
+              queryId <- QueryId.of
 
-            _   <- chatService
-                     .processQuery(
-                       ChatService.Input(
-                         contextId = context.id,
-                         query = query,
-                         queryId = queryId,
-                         promptTemplate = context.promptTemplate,
-                         retrievalSettings = context.retrievalSettings,
-                         chatModel = context.chatModel,
-                         embeddingsModel = context.embeddingsModel,
-                       ),
-                     )
-                    //  .start // fire and forget -- handled by the supervisor
-            res <-
-              Ok(
-                ChatView.responseMessage(
-                  queryId = queryId,
-                  query = query,
-                  sseUrl = s"/$prefix/${context.id}/chat/responses?queryId=$queryId",
-                  queryCloseEvent = ChatService.ResponseType.Finished.toString,
-                  queryResponseEvent = 
-                    ChatService.ResponseType.Partial.toString,
+              _   <- chatService
+                      .processQuery(
+                        ChatService.Input(
+                          contextId = context.id,
+                          query = query,
+                          queryId = queryId,
+                          promptTemplate = context.promptTemplate,
+                          retrievalSettings = context.retrievalSettings,
+                          chatModel = context.chatModel,
+                          embeddingsModel = context.embeddingsModel,
+                        ),
+                      )
+              //  .start // fire and forget -- handled by the supervisor
+              res <-
+                Ok(
+                  ChatView.responseMessage(
+                    queryId = queryId,
+                    query = query,
+                    sseUrl = s"/$prefix/${context.id}/chat/responses?queryId=$queryId",
+                    queryCloseEvent = ChatService.ResponseType.Finished.toString,
+                    queryResponseEvent = ChatService.ResponseType.Partial.toString,
                     ChatService.ResponseType.Retrieval.toString,
-                ),
-              )
-          yield res
+                  ),
+                )
+            yield res
 
       case req @ POST -> Root / ContextIdVar(contextId) / "update" =>
-        getContextOrNotFound(contextId): context =>
-          for
-            contextInfo <- req.as[ContextInfoFormDto].map(_.asContextInfo(context.id))
-            _           <- info"Updating context: $contextInfo"
-            response    <- sessionResource.useGiven: 
-              contextInfo.fold(
-                BadRequest(_),
-                contextRepository.createOrUpdate(_) *> Ok(),
-              )
-          yield response
+        sessionResource.useGiven:
+          getContextOrNotFound(contextId): context =>
+            for
+              contextInfo <- req.as[ContextInfoFormDto].map(_.asContextInfo(context.id))
+              _           <- info"Updating context: $contextInfo"
+              response    <- contextInfo.fold(
+                                BadRequest(_),
+                                contextWriteService.updateContext(_) *> Ok(),
+                              )
+            yield response
 
       case req @ POST -> Root / ContextIdVar(contextId) / "documents" / "upload" =>
-        getContextOrNotFound(contextId): context =>
-          EntityDecoder
-            .mixedMultipartResource[IO]()
-            .use: decoder =>
-              req.decodeWith(decoder, strict = true): multipart =>
-                val ingestedDocuments = multipart.parts
-                  .filter(_.name.contains(fileFieldName))
-                  .parTraverse: part =>
-                    ingestionService.ingest(
-                      IngestionService.Input(
-                        contextId = context.id,
-                        documentName = DocumentName(part.filename.getOrElse("unknown")),
-                        embeddingsModel = context.embeddingsModel,
-                        content = part.body,
-                      ),
+        sessionResource.useGiven:
+          getContextOrNotFound(contextId): context =>
+            EntityDecoder
+              .mixedMultipartResource[IO]()
+              .use: decoder =>
+                req.decodeWith(decoder, strict = true): multipart =>
+                  val ingestedDocuments = multipart.parts
+                    .filter(_.name.contains(fileFieldName))
+                    .parTraverse: part =>
+                      contextWriteService.ingest(
+                        IngestionService.Input(
+                          contextId = context.id,
+                          documentName = DocumentName(part.filename.getOrElse("unknown")),
+                          embeddingsModel = context.embeddingsModel,
+                          content = part.body,
+                        ),
+                      )
+
+                  ingestedDocuments.flatMap: docs =>
+                    Ok(
+                      ContextView.uploadedDocuments(docs, documentDeleteUrl = documentDeleteUrl),
                     )
 
-                ingestedDocuments.flatMap: docs =>
-                  Ok(
-                    ContextView.uploadedDocuments(docs, documentDeleteUrl = documentDeleteUrl),
-                  )
-
       case req @ DELETE -> Root / ContextIdVar(contextId) / "documents" / DocumentIdVar(documentId) =>
-        getContextOrNotFound(contextId): context =>
-          for
-            _        <- ingestionService.purge(contextId, documentId)
-            response <- Ok()
-          yield response
+        sessionResource.useGiven:
+          getContextOrNotFound(contextId): context =>
+            for
+              _        <- contextWriteService.purgeContext(contextId)
+              response <- Ok()
+            yield response
 
-  private def getContextOrNotFound(contextId: ContextId)(fn: ContextInfo => IO[Response[IO]]): IO[Response[IO]] =
-    sessionResource.useGiven:
-      contextRepository
-        .get(contextId)
+  private def getContextOrNotFound(contextId: ContextId)(using Session[IO])(fn: ContextInfo => IO[Response[IO]]): IO[Response[IO]] =
+    // sessionResource.useGiven:
+      contextReadService
+        .getContext(contextId)
         .flatMap:
           case Some(context) => fn(context)
           case None          => NotFound()
 
-  private def purgeContext(contextId: ContextId): IO[Unit] =
-    sessionResource.useGiven:
-      for
-        documents <- documentRepository.getAll(contextId)
-        _         <- warn"Purging context: $contextId with all of its ${documents.length} documents (!)"
-        _         <- documents.parTraverse: doc =>
-                      ingestionService.purge(contextId, doc.id)
-        _         <- contextRepository.delete(contextId)
-      yield ()
-
 object ContextController:
   def of()(using
     SessionResource,
-    PostgresContextRepository,
-    PostgresDocumentRepository,
+    ContextReadService,
+    ContextWriteService,
     ChatService[IO],
     IngestionService[IO],
     AppConfig,
