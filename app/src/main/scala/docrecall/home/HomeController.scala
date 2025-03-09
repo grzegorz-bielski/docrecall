@@ -25,7 +25,7 @@ class HomeController(using
       case GET -> Root =>
         sessionResource.useGiven:
           for
-            context <- contextWriteService.defaultContext
+            context <- contextWriteService.getOrCreateDefaultContext
 
             response = Response[IO]()
                          .withStatus(Status.Found)

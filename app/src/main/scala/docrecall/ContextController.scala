@@ -46,7 +46,12 @@ final class ContextController(using
     HttpRoutes.of[IO]:
       case GET -> Root =>
         sessionResource.useGiven:
-          redirectToDefault
+          for
+            context <- contextWriteService.getOrCreateDefaultContext
+            response = Response[IO]()
+                         .withStatus(Status.Found)
+                         .withHeaders(Location(Uri.unsafeFromString(s"/$prefix/${context.id}")))
+          yield response
 
       case GET -> Root / "new" =>
         sessionResource.useGiven:
@@ -80,8 +85,19 @@ final class ContextController(using
 
       case req @ DELETE -> Root / ContextIdVar(contextId) =>
         sessionResource.useGiven:
-          contextWriteService.purgeContext(contextId) *> Ok()
-      // *> redirectToDefault
+          for
+            _ <- contextWriteService.purgeContext(contextId)
+
+            defaultCtx <- contextWriteService.getOrCreateDefaultContext
+
+            response = Response[IO]()
+                         .withStatus(Status.Ok)
+                         .withHeaders(
+                           Headers(
+                             Header("HX-Redirect", s"/$prefix/${defaultCtx.id}"),
+                           ),
+                         )
+          yield response
 
       case GET -> Root / ContextIdVar(contextId) / "chat" / "responses" :? QueryIdMatcher(queryId) =>
         sessionResource.useGiven:
@@ -186,14 +202,6 @@ final class ContextController(using
               _        <- contextWriteService.purgeContextDocument(contextId, documentId)
               response <- Ok()
             yield response
-
-  private def redirectToDefault(using Session[IO]) =
-    for
-      context <- contextWriteService.defaultContext
-      response = Response[IO]()
-                   .withStatus(Status.Found)
-                   .withHeaders(Location(Uri.unsafeFromString(s"/$prefix/${context.id}")))
-    yield response
 
   private def getContextOrNotFound(
     contextId: ContextId,

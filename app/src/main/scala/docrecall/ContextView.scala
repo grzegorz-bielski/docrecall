@@ -108,8 +108,9 @@ object ContextView extends HtmxView:
     // TODO: broken...
     div(
       button(
-        cls         := "btn btn-sm btn-error btn-disabled",
+        cls         := "btn btn-sm btn-error",
         `hx-delete` := contextUrl(contextInfo.id),
+        `hx-swap`   := "none",
         "Delete context",
       ),
     )

@@ -59,7 +59,7 @@ final class ContextWriteService(using
   def updateContext(using Session[IO])(context: ContextInfo): IO[Unit] =
     contextRepository.createOrUpdate(context)
 
-  def defaultContext(using Session[IO]): IO[ContextInfo] =
+  def getOrCreateDefaultContext(using Session[IO]): IO[ContextInfo] =
     contextRepository.getAll
       .map(_.headOption)
       .flatMap:
