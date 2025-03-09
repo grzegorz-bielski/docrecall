@@ -29,5 +29,5 @@ class HomeController(using
 
             response = Response[IO]()
                          .withStatus(Status.Found)
-                         .withHeaders(Location(Uri.unsafeFromString(s"/$prefix/${context.id}")))
+                         .withHeaders(Location(Uri.unsafeFromString(s"/contexts/${context.id}")))
           yield response

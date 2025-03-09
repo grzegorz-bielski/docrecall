@@ -11,7 +11,7 @@ object ChatView extends HtmxView:
 
   def view(chatPostUrl: String) =
     div(
-      cls := "pl-5 md:col-span-2 border-t-2 md:border-l-2 md:border-t-0",
+      cls := "pl-5 md:col-span-2 bg-base-200",
       div(
         h2(
           cls := "text-sm text-center font-bold pt-2 tracking-widest",

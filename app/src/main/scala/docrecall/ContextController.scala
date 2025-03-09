@@ -31,8 +31,6 @@ final class ContextController(using
   logger: Logger[IO],
   contextReadService: ContextReadService,
   contextWriteService: ContextWriteService,
-  // documentRepository: PostgresDocumentRepository,
-  // ingestionService: IngestionService[IO],
   chatService: ChatService[IO],
   appConfig: AppConfig,
 ) extends TopLevelHtmxController:
@@ -48,17 +46,12 @@ final class ContextController(using
     HttpRoutes.of[IO]:
       case GET -> Root =>
         sessionResource.useGiven:
-          for
-            context <- contextWriteService.defaultContext
-            response = Response[IO]()
-                         .withStatus(Status.Found)
-                         .withHeaders(Location(Uri.unsafeFromString(s"/$prefix/${context.id}")))
-          yield response
+          redirectToDefault
 
       case GET -> Root / "new" =>
         sessionResource.useGiven:
           for
-            context  <- contextWriteService.createContext
+            context <- contextWriteService.createContext
             response = Response[IO]()
                          .withStatus(Status.SeeOther)
                          .withHeaders(Location(Uri.unsafeFromString(s"/$prefix/${context.id}")))
@@ -88,6 +81,7 @@ final class ContextController(using
       case req @ DELETE -> Root / ContextIdVar(contextId) =>
         sessionResource.useGiven:
           contextWriteService.purgeContext(contextId) *> Ok()
+      // *> redirectToDefault
 
       case GET -> Root / ContextIdVar(contextId) / "chat" / "responses" :? QueryIdMatcher(queryId) =>
         sessionResource.useGiven:
@@ -124,17 +118,17 @@ final class ContextController(using
               queryId <- QueryId.of
 
               _   <- chatService
-                      .processQuery(
-                        ChatService.Input(
-                          contextId = context.id,
-                          query = query,
-                          queryId = queryId,
-                          promptTemplate = context.promptTemplate,
-                          retrievalSettings = context.retrievalSettings,
-                          chatModel = context.chatModel,
-                          embeddingsModel = context.embeddingsModel,
-                        ),
-                      )
+                       .processQuery(
+                         ChatService.Input(
+                           contextId = context.id,
+                           query = query,
+                           queryId = queryId,
+                           promptTemplate = context.promptTemplate,
+                           retrievalSettings = context.retrievalSettings,
+                           chatModel = context.chatModel,
+                           embeddingsModel = context.embeddingsModel,
+                         ),
+                       )
               //  .start // fire and forget -- handled by the supervisor
               res <-
                 Ok(
@@ -156,9 +150,9 @@ final class ContextController(using
               contextInfo <- req.as[ContextInfoFormDto].map(_.asContextInfo(context.id))
               _           <- info"Updating context: $contextInfo"
               response    <- contextInfo.fold(
-                                BadRequest(_),
-                                contextWriteService.updateContext(_) *> Ok(),
-                              )
+                               BadRequest(_),
+                               contextWriteService.updateContext(_) *> Ok(),
+                             )
             yield response
 
       case req @ POST -> Root / ContextIdVar(contextId) / "documents" / "upload" =>
@@ -189,17 +183,26 @@ final class ContextController(using
         sessionResource.useGiven:
           getContextOrNotFound(contextId): context =>
             for
-              _        <- contextWriteService.purgeContext(contextId)
+              _        <- contextWriteService.purgeContextDocument(contextId, documentId)
               response <- Ok()
             yield response
 
-  private def getContextOrNotFound(contextId: ContextId)(using Session[IO])(fn: ContextInfo => IO[Response[IO]]): IO[Response[IO]] =
-    // sessionResource.useGiven:
-      contextReadService
-        .getContext(contextId)
-        .flatMap:
-          case Some(context) => fn(context)
-          case None          => NotFound()
+  private def redirectToDefault(using Session[IO]) =
+    for
+      context <- contextWriteService.defaultContext
+      response = Response[IO]()
+                   .withStatus(Status.Found)
+                   .withHeaders(Location(Uri.unsafeFromString(s"/$prefix/${context.id}")))
+    yield response
+
+  private def getContextOrNotFound(
+    contextId: ContextId,
+  )(using Session[IO])(fn: ContextInfo => IO[Response[IO]]): IO[Response[IO]] =
+    contextReadService
+      .getContext(contextId)
+      .flatMap:
+        case Some(context) => fn(context)
+        case None          => NotFound()
 
 object ContextController:
   def of()(using

@@ -16,7 +16,7 @@ object ContextView extends HtmxView:
   private val uploadModalId       = "uploadModal"
 
   def view(
-    contexts: Vector[ContextInfo], 
+    contexts: Vector[ContextInfo],
     contextUrl: ContextId => String,
     contextInfo: ContextInfo,
     chatPostUrl: String,
@@ -27,12 +27,14 @@ object ContextView extends HtmxView:
     documentDeleteUrl: DocumentDeleteUrl,
   )(using AppConfig) = RootLayoutView.view(
     contexts = contexts,
+    activeContextId = contextInfo.id,
     contextUrl = contextUrl,
     children = div(
-      cls := "grid grid-cols-1 md:grid-cols-5 gap-x-16",
+      cls := "grid grid-cols-1 md:grid-cols-5",
       div(
-        cls := "md:col-span-3",
+        cls := "md:col-span-3 md:px-5",
         configMenu(
+          contextUrl = contextUrl,
           uploadUrl = uploadUrl,
           contextUpdateUrl = contextUpdateUrl,
           documents = documents,
@@ -51,8 +53,8 @@ object ContextView extends HtmxView:
       docs.map(ingested => documentItem(documentDeleteUrl)(ingested.info)),
     )
 
-
   private def configMenu(
+    contextUrl: ContextId => String,
     uploadUrl: String,
     contextUpdateUrl: String,
     documents: Vector[Document.Info],
@@ -61,7 +63,7 @@ object ContextView extends HtmxView:
     documentDeleteUrl: DocumentDeleteUrl,
   ) =
     div(
-      cls  := "tabs",
+      cls := "tabs",
       tab(
         "Knowledge Base",
         knowledgeBase(
@@ -73,6 +75,7 @@ object ContextView extends HtmxView:
         checked = true,
       ),
       tab("Context Settings", contextSettings(contextInfo = contextInfo, contextUpdateUrl = contextUpdateUrl)),
+      tab("Advanced", advancedSettings(contextInfo = contextInfo, contextUrl = contextUrl)),
     )
 
   private def tab(name: String, content: Modifier, checked: Boolean = false) =
@@ -94,6 +97,20 @@ object ContextView extends HtmxView:
         role               := "tabpanel",
         cls                := "tab-content bg-base-100 p-2 md:pt-6 md:h-[calc(100dvh-14rem)]! overflow-y-scroll",
         content,
+      ),
+    )
+
+  private def advancedSettings(
+    contextInfo: ContextInfo,
+    contextUrl: ContextId => String,
+  ) =
+    // TODO: add dialog for deletion confirmation
+    // TODO: broken...
+    div(
+      button(
+        cls         := "btn btn-sm btn-error btn-disabled",
+        `hx-delete` := contextUrl(contextInfo.id),
+        "Delete context",
       ),
     )
 

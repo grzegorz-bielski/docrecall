@@ -10,7 +10,12 @@ import docrecall.common.*
 object RootLayoutView extends HtmxView:
   private lazy val drawerId = "navbar-drawer"
 
-  def view(contexts: Vector[ContextInfo], contextUrl: ContextId => String, children: scalatags.Text.Modifier*)(using
+  def view(
+    contexts: Vector[ContextInfo],
+    activeContextId: ContextId,
+    contextUrl: ContextId => String,
+    children: scalatags.Text.Modifier*,
+  )(using
     AppConfig,
   ) =
     val headContent =
@@ -53,7 +58,7 @@ object RootLayoutView extends HtmxView:
               navbar,
               children,
             ),
-            sidebar(contexts, contextUrl),
+            sidebar(contexts, activeContextId, contextUrl),
           ),
         ),
       ),
@@ -75,7 +80,7 @@ object RootLayoutView extends HtmxView:
 
   lazy val appName =
     h3(
-      cls := "text-2xl font-bold",
+      cls := "text-2xl font-bold lg:pl-4",
       "docrecall 📄",
     )
 
@@ -95,6 +100,7 @@ object RootLayoutView extends HtmxView:
 
   def sidebar(
     contexts: Vector[ContextInfo],
+    activeContextId: ContextId,
     contextUrl: ContextId => String,
   ) =
     div(
@@ -115,7 +121,7 @@ object RootLayoutView extends HtmxView:
           ),
         ),
         ul(
-          cls := "menu bg-base-200 text-base-content w-80 p-4 min-h-[calc(100vh-4rem)]" // 4rem is the height of the navbar,
+          cls := "menu bg-base-200 text-base-content w-80 p-4 min-h-[calc(100vh-4rem)]", // 4rem is the height of the navbar,
         )(
           li(
             cls := "menu-title",
@@ -125,20 +131,20 @@ object RootLayoutView extends HtmxView:
             contexts.map: context =>
               li(
                 appLink(
-                  path  = contextUrl(context.id),
+                  path = contextUrl(context.id),
                   child = context.name,
+                  attrs = cls := (if context.id == activeContextId then "menu-active" else ""),
                 ),
               ),
           ),
           li(
             cls := "mt-auto",
             appLink(
-              path  = "/contexts/new",
+              path = "/contexts/new",
               child = "Create new",
-              attrs = 
-                cls := "btn btn-primary",
+              attrs = cls := "btn btn-primary",
             ),
-          )
+          ),
         ),
       ),
     )
