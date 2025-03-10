@@ -67,9 +67,9 @@ final class PostgresEmbeddingsRepository(using Logger[IO]):
   ): Stream[IO, Embedding.Retrieved] =
     val args =
       (
-        embedding.contextId,
         StringEscapeUtils.toTantivySearchString(embedding.chunk.text),
         settings.fullTextSearchLimit,
+        embedding.contextId,
         Arr(embedding.value*),
         embedding.contextId,
         settings.semanticSearchLimit,
@@ -79,7 +79,7 @@ final class PostgresEmbeddingsRepository(using Logger[IO]):
       )
 
     Stream
-      .eval(session.prepare(retrieveQuery))
+      .eval(session.prepare(retrieveHybridQuery))
       .flatMap(_.stream(args = args, chunkSize = 1024))
 
 object PostgresEmbeddingsRepository:
@@ -117,7 +117,16 @@ object PostgresEmbeddingsRepository:
           rrfScore = rrfScore,
         )
 
-  private lazy val retrieveQuery =
+  // TODO: `full_text_search_from_ctx` is a workaround
+  // filtering on context_id in the full text search with @@@ breaks the scoring function, so we need another CTE
+  // waiting for https://github.com/paradedb/paradedb/pull/2197 to be published
+
+  // TODO: BM25 scores are for whole embeddings table, which is shared between contexts
+  // should we create a separate embeddings table for each context? -- prolly a bad idea
+  // table partitioning, partial indexes?
+  // related: https://news.ycombinator.com/item?id=41174792
+  // let's not worry about this now...
+  private lazy val retrieveHybridQuery =
     sql"""
     WITH
       full_text_search AS (
@@ -125,28 +134,33 @@ object PostgresEmbeddingsRepository:
           id,
           fragment_index,
           document_id,
+          context_id,
           paradedb.score(id) AS full_text_score
         FROM embeddings
         WHERE
-          context_id = ${ContextId.pgCodec} AND
-          value @@@ $text
+          id @@@ paradedb.match('value', $text)
         ORDER BY full_text_score DESC
         LIMIT $int4
+      ),
+      full_text_search_from_ctx AS (
+        SELECT * FROM full_text_search WHERE context_id = ${ContextId.pgCodec}
       ),
       full_text_search_ranked AS (
         SELECT
           id,
           fragment_index,
           document_id,
+          context_id,
           full_text_score,
           RANK() OVER (ORDER BY full_text_score DESC) AS rank
-        FROM full_text_search
+        FROM full_text_search_from_ctx
       ),
       semantic_search AS (
         SELECT
           id,
           fragment_index,
           document_id,
+          context_id,
           embedding <=> $_float4::vector AS semantic_score
         FROM embeddings
         WHERE
@@ -159,6 +173,7 @@ object PostgresEmbeddingsRepository:
           id,
           fragment_index,
           document_id,
+          context_id,
           semantic_score,
           RANK() OVER (ORDER BY semantic_score) AS rank
         FROM semantic_search
@@ -167,6 +182,7 @@ object PostgresEmbeddingsRepository:
         SELECT
           COALESCE(semantic_search_ranked.fragment_index, full_text_search_ranked.fragment_index) AS matched_fragment_index,
           COALESCE(semantic_search_ranked.document_id, full_text_search_ranked.document_id) AS document_id,
+          COALESCE(semantic_search_ranked.context_id, full_text_search_ranked.context_id) AS context_id,
           COALESCE(semantic_search_ranked.id, full_text_search_ranked.id) AS id,
           COALESCE(full_text_search_ranked.full_text_score, 0,0) AS full_text_score, 
           COALESCE(semantic_search_ranked.semantic_score, 0,0) AS semantic_score,
@@ -195,8 +211,8 @@ object PostgresEmbeddingsRepository:
       e.semantic_score AS semantic_score,
       e.rrf_score AS rrf_score
     FROM matched_deduped AS e
-    INNER JOIN embeddings AS ae
-    ON ae.id = e.id
+    LEFT JOIN embeddings AS ae
+    USING (context_id, document_id)
     WHERE fragment_index 
       BETWEEN matched_fragment_index - $int4 AND matched_fragment_index + $int4
     ORDER BY document_id, fragment_index, chunk_index

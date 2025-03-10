@@ -7,6 +7,20 @@ import scalatags.Text.svgAttrs.{attr as _, *}
 import scalatags.Text.implicits.given
 
 object IconsView extends HtmxView:
+  def menuIcon() =
+    svg(
+      xmlns   := "http://www.w3.org/2000/svg",
+      fill    := "none",
+      viewBox := "0 0 24 24",
+      cls     := "inline-block h-5 w-5 stroke-current",
+      path(
+        attr("stroke-linecap")  := "round",
+        attr("stroke-linejoin") := "round",
+        attr("stroke-width")    := "2",
+        d                       := "M4 6h16M4 12h16M4 18h16",
+      ),
+    )
+
   def arrowDownIcon() =
     svg(
       xmlns   := "http://www.w3.org/2000/svg",

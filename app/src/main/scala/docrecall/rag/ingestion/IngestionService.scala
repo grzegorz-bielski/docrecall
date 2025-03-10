@@ -20,6 +20,7 @@ object IngestionService:
   final case class Input(
     contextId: ContextId,
     documentName: DocumentName,
+    documentId: Option[DocumentId] = None,
     embeddingsModel: Model,
     content: Stream[IO, Byte],
   )
@@ -29,6 +30,7 @@ final class PostgresIngestionService(using
   documentRepository: PostgresDocumentRepository,
   embeddingsService: EmbeddingService[IO],
   vectorStoreRepository: PostgresEmbeddingsRepository,
+  documentTokenizer: DocumentTokenizer[IO],
   logger: Logger[IO],
 ) extends IngestionService[IO]:
   def purge(contextId: ContextId, documentId: DocumentId): IO[Unit] =
@@ -44,12 +46,10 @@ final class PostgresIngestionService(using
 
     sessionResource.useGiven: (session: Session[IO]) ?=>
       for
-        documentId      <- DocumentId.of
+        documentId <- input.documentId.fold(DocumentId.of)(IO.pure)
 
-        _documentFragments <- LangChain4jIngestion.loadFrom(content, maxTokens = embeddingsModel.contextLength)
-        // TODO: temp
-        documentFragments   = _documentFragments.take(2)
-        _                  <- info"Document $documentId: loaded ${documentFragments.size} fragments from the document."
+        documentFragments <- documentTokenizer.tokenize(content, maxTokens = embeddingsModel.contextLength)
+        _                 <- info"Document $documentId: loaded ${documentFragments.size} fragments from the document."
 
         documentInfo = Document.Info(
                          id = documentId,
@@ -85,5 +85,7 @@ object PostgresIngestionService:
     EmbeddingService[IO],
     PostgresEmbeddingsRepository,
   ): IO[PostgresIngestionService] =
-    for given Logger[IO] <- Slf4jLogger.create[IO]
+    for
+      given Logger[IO]            <- Slf4jLogger.create[IO]
+      given DocumentTokenizer[IO] <- DocumentTokenizer.of
     yield PostgresIngestionService()

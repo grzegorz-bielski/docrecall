@@ -2,10 +2,9 @@
     "name": "docrecall",
     "description": "",
     "main": "",
-    "workspaces":[
-      "app"
+    "workspaces": [
+        "app"
     ],
     "author": "",
     "license": "APL-1.0"
-  }
-  
+}

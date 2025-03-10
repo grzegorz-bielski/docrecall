@@ -16,6 +16,8 @@ object ContextView extends HtmxView:
   private val uploadModalId       = "uploadModal"
 
   def view(
+    contexts: Vector[ContextInfo],
+    contextUrl: ContextId => String,
     contextInfo: ContextInfo,
     chatPostUrl: String,
     contextUpdateUrl: String,
@@ -24,11 +26,15 @@ object ContextView extends HtmxView:
     fileFieldName: String,
     documentDeleteUrl: DocumentDeleteUrl,
   )(using AppConfig) = RootLayoutView.view(
-    div(
-      cls := "grid grid-cols-1 md:grid-cols-5 gap-x-16 mt-4 md:mt-8",
+    contexts = contexts,
+    activeContextId = contextInfo.id,
+    contextUrl = contextUrl,
+    children = div(
+      cls := "grid grid-cols-1 md:grid-cols-5",
       div(
-        cls := "md:col-span-3",
+        cls := "md:col-span-3 md:px-5",
         configMenu(
+          contextUrl = contextUrl,
           uploadUrl = uploadUrl,
           contextUpdateUrl = contextUpdateUrl,
           documents = documents,
@@ -47,88 +53,8 @@ object ContextView extends HtmxView:
       docs.map(ingested => documentItem(documentDeleteUrl)(ingested.info)),
     )
 
-  def contextsOverview(contexts: Vector[ContextInfo], createNewUrl: String, contextUrl: ContextId => String)(using
-    AppConfig,
-  ) =
-    RootLayoutView.view(
-      div(
-        cls := "mx-auto",
-        div(
-          cls := "flex justify-between items-center bg-base-200 p-5 rounded-box my-4 md:my-8",
-          h2(
-            cls := "text-2xl",
-            "Your contexts",
-          ),
-          div(
-            appLink(
-              createNewUrl,
-              cls := "btn btn-primary",
-              "Create new",
-            ),
-          ),
-        ),
-        div(
-          ul(
-            cls := "grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr justify-between",
-            contexts.map(contextCard(_, contextUrl)),
-          ),
-        ),
-      ),
-    )
-
-  private def contextCard(context: ContextInfo, contextUrl: ContextId => String) =
-    val contextCardId = s"context-${context.id}"
-
-    li(
-      cls := "block",
-      id  := contextCardId,
-      div(
-        cls := "card h-full bg-base-100 shadow-lg shadow-xl transition-shadow",
-        div(
-          cls := "card-body",
-          h2(cls := "card-title", context.name),
-          p(context.description),
-          div(
-            cls  := "join mr-0 ml-auto",
-            appLink(
-              path = contextUrl(context.id),
-              child = "Edit",
-              attrs = cls := "btn btn-outline rounded-btn join-item",
-            ),
-            div(
-              cls := "dropdown dropdown-end",
-              div(
-                tabindex := "0",
-                role     := "button",
-                cls      := "btn btn-outline join-item rounded-btn",
-                IconsView.arrowDownIcon(),
-              ),
-              ul(
-                tabindex := "0",
-                cls      := "menu join join-vertical dropdown-content bg-base-100 rounded-box z-[1] mt-1 w-52 p-2 shadow",
-                li(
-                  button(
-                    cls := "join-item btn btn-disabled btn-sm w-full",
-                    "Disable",
-                  ),
-                ),
-                li(
-                  button(
-                    cls         := "join-item btn btn-sm btn-error w-full",
-                    `hx-delete` := contextUrl(context.id),
-                    `hx-target` := s"#$contextCardId",
-                    `hx-swap`   := "outerHTML",
-                    "Delete",
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    )
-
   private def configMenu(
+    contextUrl: ContextId => String,
     uploadUrl: String,
     contextUpdateUrl: String,
     documents: Vector[Document.Info],
@@ -137,8 +63,7 @@ object ContextView extends HtmxView:
     documentDeleteUrl: DocumentDeleteUrl,
   ) =
     div(
-      role := "tablist",
-      cls  := "tabs tabs-bordered",
+      cls := "tabs",
       tab(
         "Knowledge Base",
         knowledgeBase(
@@ -150,6 +75,7 @@ object ContextView extends HtmxView:
         checked = true,
       ),
       tab("Context Settings", contextSettings(contextInfo = contextInfo, contextUpdateUrl = contextUpdateUrl)),
+      tab("Advanced", advancedSettings(contextInfo = contextInfo, contextUrl = contextUrl)),
     )
 
   private def tab(name: String, content: Modifier, checked: Boolean = false) =
@@ -162,17 +88,6 @@ object ContextView extends HtmxView:
           Vector(
             "tab",
             "rounded-box",
-            "min-w-36",
-            "focus:[box-shadow:none]",
-            "border-t-0",
-            "border-x-0",
-            "bg-transparent",
-            "checked:bg-none",
-            "checked:bg-transparent",
-            "checked:hover:bg-transparent",
-            "checked:focus:bg-transparent",
-            "checked:hover:border-current",
-            "checked:focus:border-current",
           )
             .mkString(" "),
         attr("aria-label") := name,
@@ -180,8 +95,22 @@ object ContextView extends HtmxView:
       ),
       div(
         role               := "tabpanel",
-        cls                := "tab-content bg-base-100 pt-2 md:pt-6 md:h-[calc(100dvh-16rem)] overflow-y-scroll",
+        cls                := "tab-content bg-base-100 p-2 md:pt-6",
         content,
+      ),
+    )
+
+  private def advancedSettings(
+    contextInfo: ContextInfo,
+    contextUrl: ContextId => String,
+  ) =
+    div(
+      cls := "md:h-[calc(100dvh-14rem)]! overflow-y-scroll",
+      button(
+        cls         := "btn btn-sm btn-error",
+        `hx-delete` := contextUrl(contextInfo.id),
+        `hx-swap`   := "none",
+        "Delete context",
       ),
     )
 
@@ -203,44 +132,47 @@ object ContextView extends HtmxView:
         `hx-post` := contextUpdateUrl,
         `hx-swap` := "none",
         div(
-          cls := "grid grid-cols-1 md:grid-cols-2 gap-2",
-          formInput(
-            labelValue = "Name",
-            fieldName = "name",
-            value = contextInfo.name,
+          cls := "md:h-[calc(100dvh-12rem)]! overflow-y-scroll",
+          div(
+            cls := "grid grid-cols-1 md:grid-cols-2 gap-2",
+            formInput(
+              labelValue = "Name",
+              fieldName = "name",
+              value = contextInfo.name,
+            ),
+            formInput(
+              labelValue = "Description",
+              fieldName = "description",
+              value = contextInfo.description,
+            ),
           ),
-          formInput(
-            labelValue = "Description",
-            fieldName = "description",
-            value = contextInfo.description,
+          formTextarea(
+            labelValue = "Prompt Template",
+            fieldName = "promptTemplate",
+            value = promptTemplateJson,
           ),
-        ),
-        formTextarea(
-          labelValue = "Prompt Template",
-          fieldName = "promptTemplate",
-          value = promptTemplateJson,
-        ),
-        formTextarea(
-          labelValue = "Retrieval Settings",
-          fieldName = "retrievalSettings",
-          value = retrievalSettingsJson,
-        ),
-        formTextarea(
-          labelValue = "Chat Completion Settings",
-          fieldName = "chatCompletionSettings",
-          value = chatCompletionSettingsJson,
-        ),
-        div(
-          cls := "grid grid-cols-1 md:grid-cols-2 gap-2",
-          formSelect(
-            labelValue = "Chat Model",
-            fieldName = "chatModel",
-            options = modelOptions(contextInfo.chatModel),
+          formTextarea(
+            labelValue = "Retrieval Settings",
+            fieldName = "retrievalSettings",
+            value = retrievalSettingsJson,
           ),
-          formSelect(
-            labelValue = "Embeddings Model",
-            fieldName = "embeddingsModel",
-            options = modelOptions(contextInfo.embeddingsModel),
+          formTextarea(
+            labelValue = "Chat Completion Settings",
+            fieldName = "chatCompletionSettings",
+            value = chatCompletionSettingsJson,
+          ),
+          div(
+            cls := "grid grid-cols-1 md:grid-cols-2 gap-2",
+            formSelect(
+              labelValue = "Chat Model",
+              fieldName = "chatModel",
+              options = modelOptions(contextInfo.chatModel),
+            ),
+            formSelect(
+              labelValue = "Embeddings Model",
+              fieldName = "embeddingsModel",
+              options = modelOptions(contextInfo.embeddingsModel),
+            ),
           ),
         ),
         button(
@@ -254,7 +186,7 @@ object ContextView extends HtmxView:
     formControl(
       labelValue,
       textarea(
-        cls  := "textarea textarea-bordered w-full h-64",
+        cls  := "textarea w-full h-64",
         name := fieldName,
         value,
       ),
@@ -264,7 +196,7 @@ object ContextView extends HtmxView:
     formControl(
       labelValue,
       input(
-        cls           := "input input-bordered w-full",
+        cls           := "input w-full",
         name          := fieldName,
         attr("value") := value,
       ),
@@ -276,7 +208,7 @@ object ContextView extends HtmxView:
     formControl(
       labelValue,
       select(
-        cls  := "select select-bordered w-full",
+        cls  := "select w-full",
         name := fieldName,
         options.map: op =>
           option(
@@ -295,14 +227,11 @@ object ContextView extends HtmxView:
     )
 
   private def formControl(labelValue: String, input: Modifier) =
-    label(
-      cls := "form-control w-full",
-      div(
-        cls := "label",
-        span(
-          cls := "label-text",
-          labelValue,
-        ),
+    fieldset(
+      cls := "fieldset w-full rounded-box bg-base-200 p-4 rounded-box",
+      legend(
+        cls := "fieldset-legend",
+        labelValue,
       ),
       input,
     )
@@ -314,7 +243,7 @@ object ContextView extends HtmxView:
 
     li(
       id  := documentFileId,
-      cls := "group rounded-r-box hover:bg-base-300 focus-within:bg-base-300 outline-none mr-5",
+      cls := "group rounded-r-box hover:bg-base-300 focus-within:bg-base-300 outline-hidden mr-5",
       div(
         cls := "min-h-8 py-2 px-3 text-xs flex gap-3 items-center",
         span(IconsView.documentIcon()),
@@ -367,6 +296,7 @@ object ContextView extends HtmxView:
     )
 
     div(
+      cls := "md:h-[calc(100dvh-14rem)]! overflow-y-scroll",
       ul(
         cls := "bg-base-200 rounded-lg w-full max-w-s mb-4",
         li(
@@ -375,7 +305,7 @@ object ContextView extends HtmxView:
             summary(
               cls := Vector(
                 "p-4 cursor-pointer rounded-lg",
-                "hover:bg-base-300 active:bg-base-400 focus:bg-base-400 outline-none transition-colors",
+                "bg-base-200 hover:bg-base-300 active:bg-base-400 focus:bg-base-400 outline-hidden transition-colors",
               ).mkString(" "),
               "Files",
               // TODO: add folder icon to the right, right now it breaks the summary marker

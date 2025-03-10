@@ -8,6 +8,8 @@ import cats.kernel.Eq
 import cats.effect.*
 import cats.syntax.all.*
 
+import docrecall.rag.*
+
 opaque type QueryId <: UUID = UUID
 object QueryId:
   inline def apply(uuid: UUID): QueryId = uuid
@@ -26,3 +28,13 @@ object ChatQuery:
   given FormDataDecoder[ChatQuery] = (
     field[String]("content")
   ).map(ChatQuery.apply)
+
+final case class RetrievalMetadata(
+  retrievedEmbeddings: Map[DocumentId, Vector[Embedding.Retrieved]]
+)
+
+object RetrievalMetadata:
+  def of(retrievedEmbeddings: Vector[Embedding.Retrieved]): RetrievalMetadata =
+    RetrievalMetadata(
+      retrievedEmbeddings = retrievedEmbeddings.groupBy(_.documentId)
+    )

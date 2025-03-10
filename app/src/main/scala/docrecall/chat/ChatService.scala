@@ -16,6 +16,7 @@ import java.util.UUID
 import java.time.Duration
 
 import docrecall.rag.vectorstore.*
+import docrecall.rag.retrieval.*
 import docrecall.rag.*
 import docrecall.postgres.*
 
@@ -75,10 +76,12 @@ object ChatService:
     def queryId: QueryId
 
   enum ResponseType:
-    case Partial, Finished
+    case Partial, Retrieval, Finished
 
   enum Response(val eventType: ResponseType) extends WithQueryId:
     case Partial(queryId: QueryId, content: String) extends Response(ResponseType.Partial)
+
+    case Retrieval(queryId: QueryId, metadata: RetrievalMetadata) extends Response(ResponseType.Retrieval)
 
     case Finished(queryId: QueryId) extends Response(ResponseType.Finished)
 
@@ -95,35 +98,13 @@ object ChatService:
     def of[F[_]: Concurrent](chatService: ChatService[F]): Resource[F, ChatService[F]] =
       Supervisor[F].map(Supervised(chatService, _))
 
-final class ChatServiceImpl(
-  pubSub: PubSub[IO],
-  retrieveEmbeddings: (Embedding.Query, RetrievalSettings) => Stream[IO, Embedding.Retrieved],
-)(using
+final class ChatServiceImpl(pubSub: PubSub[IO])(using
   logger: Logger[IO],
   chatCompletionService: ChatCompletionService[IO],
-  embeddingService: EmbeddingService[IO],
+  contextReadService: ContextReadService,
 ) extends ChatService[IO]:
   import ChatService.*
   import ChatServiceImpl.*
-
-  // private def appPrompt(query: String, context: Option[String]) = Prompt(
-  //   taskContext = "You are an expert Q&A system that is trusted around the world.".some,
-  //   toneContext = "You should maintain a professional and friendly tone.".some,
-  //   taskDescription = Vector(
-  //     "Some rules to follow:",
-  //     "- Always answer the query using the provided, context information, and not prior knowledge",
-  //     "- Only answer if you know the answer with certainty.",
-  //     "- Do not try to resolve problems mentioned in the context.",
-  //     "- If you are unsure how to respond, say \"Sorry, I didn't understand that. Could you rephrase your question?\"",
-  //     "- If you are unable to answer the question, say \"Sorry, I don't have that information.\"",
-  //   ).mkString("\n").some,
-  //   queryContext = s"<context> $context </context>".some,
-  //   query = s"<query> $query </query>",
-  //   precognition = Vector(
-  //     "Before you answer, take into consideration the context.",
-  //     "Then, pull the most relevant fragment from the context and consider whether it answers the user's query provided below or whether it lacks sufficient detail.",
-  //   ).mkString("\n").some,
-  // )
 
   def processQuery(input: ChatService.Input): IO[Unit] =
     import input.*
@@ -131,36 +112,43 @@ final class ChatServiceImpl(
     for
       _                   <- info"Processing the response for queryId: $queryId has started."
       processingStarted   <- IO.realTimeInstant
-      queryEmbeddings     <- embeddingService.createQueryEmbeddings(
-                               contextId = contextId,
-                               chunk = Chunk(query.content, index = 0),
-                               model = embeddingsModel,
+      retrievedEmbeddings <- contextReadService.retrieve(
+                               RetrievalService.Input(
+                                 query = query.content,
+                                 contextId = contextId,
+                                 embeddingsModel = embeddingsModel,
+                                 retrievalSettings = retrievalSettings,
+                               ),
                              )
-      retrievedEmbeddings <- retrieveEmbeddings(queryEmbeddings, retrievalSettings).compile.toVector
-
-      // _ <- info"Retrieved embeddings: $retrievedEmbeddings"
-
-      // TODO: group retrieved embeddings by (documentId, version, fragmentIndex) and show them in chat
-
-      contextChunks = retrievedEmbeddings.map(_.chunk)
-      _            <- info"Retrieved context: ${contextChunks.map(_.toEmbeddingInput)}"
 
       prompt =
         Prompt(
           query = query.content,
-          queryContext = contextChunks.map(_.toEmbeddingInput).mkString("\n").some,
+          // TODO: move it into a tool / LLM function call ?
+          queryContext = retrievedEmbeddings.map(_.chunk.toEmbeddingInput).mkString("\n").some,
           template = promptTemplate,
         )
 
-      _ <- chatCompletionService
-             .chatCompletion(prompt, model = chatModel)
-             .map: chatMsg =>
-               Response.Partial(
-                 queryId = queryId,
-                 content = chatMsg.contentDeltas,
-               )
-             .onComplete:
-               Stream(Response.Finished(queryId = queryId))
+      metadataStream = Stream
+                         .emit(
+                           Response.Retrieval(
+                             queryId = queryId,
+                             metadata = RetrievalMetadata.of(retrievedEmbeddings),
+                           ),
+                         )
+                         .covary[IO]
+
+      chatResponseStream = chatCompletionService
+                             .chatCompletion(prompt, model = chatModel)
+                             .map: chatMsg =>
+                               Response.Partial(
+                                 queryId = queryId,
+                                 content = chatMsg.contentDeltas,
+                               )
+                             .onComplete:
+                               Stream(Response.Finished(queryId = queryId))
+
+      _ <- (metadataStream ++ chatResponseStream)
              .evalTap: chatMsg =>
                debug"Received chat message: $chatMsg"
              .evalTap(pubSub.publish)
@@ -184,16 +172,13 @@ object ChatServiceImpl:
   def of()(using
     SessionResource,
     ChatCompletionService[IO],
-    PostgresEmbeddingsRepository,
-    EmbeddingService[IO],
+    ContextReadService,
+    // PostgresEmbeddingsRepository,
+    // EmbeddingService[IO],
   ): Resource[IO, ChatService[IO]] =
     for
       given Logger[IO] <- Slf4jLogger.create[IO].toResource
       pubSub           <- PubSub.resource[IO]
-      getEmbeddings     = (query: Embedding.Query, settings: RetrievalSettings) =>
-                            Stream
-                              .resource(summon[SessionResource])
-                              .flatMap(summon[PostgresEmbeddingsRepository].retrieve(query, settings)(using _))
 
-      chatService <- ChatService.Supervised.of(ChatServiceImpl(pubSub, getEmbeddings))
+      chatService <- ChatService.Supervised.of(ChatServiceImpl(pubSub))
     yield chatService

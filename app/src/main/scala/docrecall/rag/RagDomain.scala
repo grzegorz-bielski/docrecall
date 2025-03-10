@@ -7,6 +7,7 @@ import com.github.plokhotnyuk.jsoniter_scala.macros.*
 import skunk.codec.all.*
 import skunk.*
 import cats.instances.bigInt
+import unindent.*
 
 import docrecall.common.SkunkJson.*
 
@@ -33,6 +34,18 @@ final case class Chunk(
 ):
   def toEmbeddingInput: String =
     metadata.toEmbeddingInput ++ s"\n$text"
+
+  override def toString: String = 
+    i"""
+    Chunk(
+      text:
+        ```````
+        $text
+        ```````,
+      index: $index,
+      metadata: $metadata,
+    )
+    """
 
 opaque type Metadata = Map[String, String]
 object Metadata:

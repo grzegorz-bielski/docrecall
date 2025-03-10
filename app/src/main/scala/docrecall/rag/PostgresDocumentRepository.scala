@@ -25,27 +25,27 @@ import PostgresDocumentRepository.*
 final class PostgresDocumentRepository(using Logger[IO]):
   // TODO: pagination?
   def getAll(contextId: ContextId)(using session: Session[IO]): IO[Vector[Document.Info]] =
-      session
-        .execute:
-          selectDocumentFragment.query(documentInfoCodec)
-        .map(_.toVector)
-
-  // TODO: not used + name is not unique, there could be multiple results
-  // def get(contextId: ContextId, name: DocumentName)(using session: Session[IO]): IO[Option[Document.Info]] =
-  //   session
-  //     .prepare:
-  //       sql"""
-  //       $selectDocumentFragment
-  //       WHERE context_id = ${ContextId.pgCodec}
-  //       AND name = $text
-  //       """
-  //       .query(documentInfoCodec)
-  //     .flatMap(_.option((contextId, name)))
+    session
+      .prepare:
+        sql"""
+          SELECT
+            id, 
+            context_id, 
+            name,
+            description, 
+            type,
+            metadata
+          FROM documents
+          WHERE context_id = ${ContextId.pgCodec}
+        """
+          .query(documentInfoCodec)
+      .flatMap:
+        _.stream(contextId, chunkSize = 32).compile.toVector
 
   def createOrUpdate(document: Document.Info)(using session: Session[IO]): IO[Unit] =
-      session
-        .prepare:
-          sql"""
+    session
+      .prepare:
+        sql"""
           INSERT INTO documents (
             id,
             context_id,
@@ -58,15 +58,14 @@ final class PostgresDocumentRepository(using Logger[IO]):
               description = EXCLUDED.description,
               type = EXCLUDED.type,
               metadata = EXCLUDED.metadata
-          """
-          .command
-        .flatMap(_.execute(document))
+          """.command
+      .flatMap(_.execute(document))
       .void
 
   def delete(id: DocumentId)(using session: Session[IO]): IO[Unit] =
     session
       .prepare:
-        sql"""DELETE FROM contexts WHERE id = ${DocumentId.pgCodec}""".command
+        sql"""DELETE FROM documents WHERE id = ${DocumentId.pgCodec}""".command
       .flatMap(_.execute(id))
       .void
 
@@ -75,17 +74,17 @@ object PostgresDocumentRepository:
     for given Logger[IO] <- Slf4jLogger.create[IO]
     yield PostgresDocumentRepository()
 
-  private lazy val selectDocumentFragment =
-    sql"""
-    SELECT
-      id, 
-      context_id, 
-      name,
-      description, 
-      type,
-      metadata
-    FROM documents
-    """
+  // private lazy val selectDocumentFragment =
+  //   sql"""
+  //   SELECT
+  //     id,
+  //     context_id,
+  //     name,
+  //     description,
+  //     type,
+  //     metadata
+  //   FROM documents
+  //   """
 
   private lazy val documentInfoCodec: Codec[Document.Info] =
     (

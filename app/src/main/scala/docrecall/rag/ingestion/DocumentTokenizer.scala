@@ -14,36 +14,37 @@ import dev.langchain4j.data.document.parser.TextDocumentParser
 import dev.langchain4j.data.document.splitter.DocumentSplitters
 import dev.langchain4j.data.document.parser.apache.tika.ApacheTikaDocumentParser
 
-object LangChain4jIngestion:
-  // TODO: this is just a rough estimation that works with currently used models
+trait DocumentTokenizer[F[_]]:
+  def tokenize(stream: Stream[F, Byte], maxTokens: Int): IO[Vector[Document.Fragment]]
 
+object DocumentTokenizer:
+  def of: IO[DocumentTokenizer[IO]] = IO.pure(LangChain4jDocumentTokenizer())
+
+final class LangChain4jDocumentTokenizer extends DocumentTokenizer[IO]:
   // we should really use a model specific tokenizer like in transformers lib: https://huggingface.co/Snowflake/snowflake-arctic-embed-m#using-huggingface-transformers
   // waiting for... https://github.com/ollama/ollama/issues/3582
   // llama.cpp already has the endpoints for it: https://github.com/ggerganov/llama.cpp/blob/master/examples/server/README.md
 
   // langchain4j doesn't have a model specific tokenizer yet
+  // TODO: this is just a rough estimation that works with currently used models
   private val minCharsPerToken = 1 // only this is somewhat working
   private val maxCharsPerToken = 5
 
-  def loadFrom(stream: Stream[IO, Byte], maxTokens: Int): IO[Vector[Document.Fragment]] =
+  def tokenize(stream: Stream[IO, Byte], maxTokens: Int): IO[Vector[Document.Fragment]] =
     toInputStreamResource(stream).use: inputStream =>
       val documentParser = ApacheTikaDocumentParser()
 
       IO.blocking(documentParser.parse(inputStream))
         .flatMap(processDocument(_, maxTokens))
 
-  def loadPDF(path: Path, maxTokens: Int): IO[Vector[Document.Fragment]] =
-    IO.blocking:
-      val documentParser = ApacheTikaDocumentParser()
-      FileSystemDocumentLoader.loadDocument(path, documentParser)
-    .flatMap(processDocument(_, maxTokens))
-
   private def processDocument(document: LangChain4JDocument, maxTokens: Int): IO[Vector[Document.Fragment]] =
     IO.blocking:
       val maxSegmentSizeInChars = maxTokens * minCharsPerToken
       val maxOverlapSizeInChars = 1 * maxCharsPerToken
 
-      // creating sentence splitter is effective, it loads opennlp binary from the classpath
+      // TODO: rewrite it?
+      // creating sentence splitter is a side effect, it loads opennlp binary from the classpath
+      // https://opennlp.apache.org/docs/2.5.3/manual/opennlp.html#tools.sentdetect
       val splitter = DocumentSplitters.recursive(
         maxSegmentSizeInChars,
         maxOverlapSizeInChars,
