@@ -95,7 +95,7 @@ object ContextView extends HtmxView:
       ),
       div(
         role               := "tabpanel",
-        cls                := "tab-content bg-base-100 p-2 md:pt-6 md:h-[calc(100dvh-14rem)]! overflow-y-scroll",
+        cls                := "tab-content bg-base-100 p-2 md:pt-6",
         content,
       ),
     )
@@ -104,9 +104,8 @@ object ContextView extends HtmxView:
     contextInfo: ContextInfo,
     contextUrl: ContextId => String,
   ) =
-    // TODO: add dialog for deletion confirmation
-    // TODO: broken...
     div(
+      cls := "md:h-[calc(100dvh-14rem)]! overflow-y-scroll",
       button(
         cls         := "btn btn-sm btn-error",
         `hx-delete` := contextUrl(contextInfo.id),
@@ -133,44 +132,47 @@ object ContextView extends HtmxView:
         `hx-post` := contextUpdateUrl,
         `hx-swap` := "none",
         div(
-          cls := "grid grid-cols-1 md:grid-cols-2 gap-2",
-          formInput(
-            labelValue = "Name",
-            fieldName = "name",
-            value = contextInfo.name,
+          cls := "md:h-[calc(100dvh-12rem)]! overflow-y-scroll",
+          div(
+            cls := "grid grid-cols-1 md:grid-cols-2 gap-2",
+            formInput(
+              labelValue = "Name",
+              fieldName = "name",
+              value = contextInfo.name,
+            ),
+            formInput(
+              labelValue = "Description",
+              fieldName = "description",
+              value = contextInfo.description,
+            ),
           ),
-          formInput(
-            labelValue = "Description",
-            fieldName = "description",
-            value = contextInfo.description,
+          formTextarea(
+            labelValue = "Prompt Template",
+            fieldName = "promptTemplate",
+            value = promptTemplateJson,
           ),
-        ),
-        formTextarea(
-          labelValue = "Prompt Template",
-          fieldName = "promptTemplate",
-          value = promptTemplateJson,
-        ),
-        formTextarea(
-          labelValue = "Retrieval Settings",
-          fieldName = "retrievalSettings",
-          value = retrievalSettingsJson,
-        ),
-        formTextarea(
-          labelValue = "Chat Completion Settings",
-          fieldName = "chatCompletionSettings",
-          value = chatCompletionSettingsJson,
-        ),
-        div(
-          cls := "grid grid-cols-1 md:grid-cols-2 gap-2",
-          formSelect(
-            labelValue = "Chat Model",
-            fieldName = "chatModel",
-            options = modelOptions(contextInfo.chatModel),
+          formTextarea(
+            labelValue = "Retrieval Settings",
+            fieldName = "retrievalSettings",
+            value = retrievalSettingsJson,
           ),
-          formSelect(
-            labelValue = "Embeddings Model",
-            fieldName = "embeddingsModel",
-            options = modelOptions(contextInfo.embeddingsModel),
+          formTextarea(
+            labelValue = "Chat Completion Settings",
+            fieldName = "chatCompletionSettings",
+            value = chatCompletionSettingsJson,
+          ),
+          div(
+            cls := "grid grid-cols-1 md:grid-cols-2 gap-2",
+            formSelect(
+              labelValue = "Chat Model",
+              fieldName = "chatModel",
+              options = modelOptions(contextInfo.chatModel),
+            ),
+            formSelect(
+              labelValue = "Embeddings Model",
+              fieldName = "embeddingsModel",
+              options = modelOptions(contextInfo.embeddingsModel),
+            ),
           ),
         ),
         button(
@@ -294,6 +296,7 @@ object ContextView extends HtmxView:
     )
 
     div(
+      cls := "md:h-[calc(100dvh-14rem)]! overflow-y-scroll",
       ul(
         cls := "bg-base-200 rounded-lg w-full max-w-s mb-4",
         li(

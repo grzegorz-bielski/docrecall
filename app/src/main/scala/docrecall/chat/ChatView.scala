@@ -43,12 +43,12 @@ object ChatView extends HtmxView:
 
   def messages()                     =
     div(
-      cls := "py-5 pr-5 md:h-[calc(100dvh-9.7rem)] md:overflow-y-scroll",
+      cls := "py-5 pr-5 md:h-[calc(100dvh-9.3rem)] md:overflow-y-scroll",
       id  := messagesViewId,
     )(
       div(
         cls := "chat chat-start",
-        div(cls := "chat-bubble chat-bubble-primary", "Hello, how can I help you?"),
+        div(cls := "chat-bubble chat-bubble-primary shadow-md", "Hello, how can I help you?"),
       ),
     )
 
@@ -64,7 +64,7 @@ object ChatView extends HtmxView:
     div(
       div(
         cls           := "chat chat-end",
-        div(cls := "chat-bubble chat-bubble-secondary", query.content),
+        div(cls := "chat-bubble chat-bubble-secondary shadow-md", query.content),
       ),
       div(
         id            := eventSourceListenerId,
@@ -78,7 +78,7 @@ object ChatView extends HtmxView:
       div(
         cls           := "chat chat-start",
         div(
-          cls := "chat-bubble",
+          cls := "chat-bubble bg-base-100 shadow-md",
           id  := chatBubbleId,
         )(),
       ),
@@ -89,62 +89,75 @@ object ChatView extends HtmxView:
     // sse-close is not always enough
     div(id := eventSourceListenerId, `hx-swap-oob` := "true")
 
-  def responseRetrievalChunk(
-    metadata: RetrievalMetadata,
-  ) =
-    div(
-      cls := "pb-5",
-      h3(
-        // cls := "",
-        "Document fragments:",
-      ),
-      ul(
-        metadata.retrievedEmbeddings.toVector.map: (docId, retrieved) =>
-          li(
-            cls := "py-2",
-            div(
-              cls := "bg-base-200 collapse",
-              input(`type` := "checkbox", cls := "peer w-full h-full"),
-              article(
-                cls        := "collapse-title bg-primary text-primary-content peer-checked:bg-base-200",
-                docId.toString,
-              ),
-              ul(
-                cls        := "collapse-content bg-primary text-primary-content peer-checked:bg-base-200",
-                retrieved.map: embedding =>
-                  li(
-                    cls := "text-sm tracking-widest",
-                    div(cls := "divider"),
-                    p(
-                      span(cls := "font-bold", "Index: "),
-                      span(embedding.fragmentIndex.toString),
-                    ),
-                    p(
-                      span(cls := "font-bold", "Matched Index: "),
-                      span(embedding.matchedFragmentIndex.toString),
-                    ),
-                    p(
-                      span(cls := "font-bold", "RRF Score: "),
-                      span(embedding.rrfScore.toString),
-                    ),
-                    p(
-                      span(cls := "font-bold", "Semantic Score: "),
-                      span(embedding.semanticScore.toString),
-                    ),
-                    p(
-                      span(cls := "font-bold", "Full Text Score: "),
-                      span(embedding.fullTextScore.toString),
-                    ),
-                    p(
-                      span(cls := "font-bold", "Chunk: "),
-                      span(sanitizeChunk(embedding.chunk.text)),
-                    ),
+  def responseRetrievalChunk(metadata: RetrievalMetadata) =
+    val retrieved = metadata.retrievedEmbeddings.toVector
+
+    if retrieved.isEmpty then
+      div(
+        cls := "pb-5",
+        h3(
+          cls := "font-bold",
+          "No documents retrieved.",
+        ),
+      )
+    else
+      div(
+        cls := "pb-5",
+        h3(
+          cls := "font-bold",
+          "Document fragments:",
+        ),
+        ul(
+          retrieved.map: (docId, retrieved) =>
+            li(
+              cls := "py-2",
+              div(
+                cls := "bg-base-200 collapse",
+                input(`type` := "checkbox", cls := "peer w-full h-full"),
+                article(
+                  cls        := "collapse-title bg-primary text-primary-content peer-hover:bg-base-300 peer-focus:bg-base-300",
+                  docId.toString,
+                ),
+                div(
+                  cls        := "collapse-content bg-base-200 text-primary-content outline-none",
+                  ul(
+                    cls := "overflow-y-scroll h-84 outline-none",
+                    retrieved.map: embedding =>
+                      li(
+                        cls := "text-xs tracking-widest",
+                        div(cls := "divider"),
+                        p(
+                          span(cls := "font-bold", "Index: "),
+                          span(embedding.fragmentIndex.toString),
+                        ),
+                        p(
+                          span(cls := "font-bold", "Matched Index: "),
+                          span(embedding.matchedFragmentIndex.toString),
+                        ),
+                        p(
+                          span(cls := "font-bold", "RRF Score: "),
+                          span(embedding.rrfScore.toString),
+                        ),
+                        p(
+                          span(cls := "font-bold", "Semantic Score: "),
+                          span(embedding.semanticScore.toString),
+                        ),
+                        p(
+                          span(cls := "font-bold", "Full Text Score: "),
+                          span(embedding.fullTextScore.toString),
+                        ),
+                        p(
+                          span(cls := "font-bold", "Chunk: "),
+                          span(sanitizeChunk(embedding.chunk.text)),
+                        ),
+                      ),
                   ),
+                ),
               ),
             ),
-          ),
-      ),
-    )
+        ),
+      )
+
   def responseChunk(content: String) =
     span(sanitizeChunk(content))
 
