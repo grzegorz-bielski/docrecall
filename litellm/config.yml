@@ -1,0 +1,10 @@
+model_list:
+  - model_name: mistral-large-latest
+    litellm_params: 
+      model: mistral/mistral-large-latest
+      api_base: https://api.mistral.ai/v1
+
+  - model_name: mistral-embed
+    litellm_params:
+      model: mistral/mistral-embed
+      api_base: https://api.mistral.ai/v1

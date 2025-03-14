@@ -16,7 +16,7 @@ final class SttpSlackClient(using backend: SttpBackend) extends SlackClient[IO]:
   def respondTo(responseUrl: String, response: MsgPayload): IO[Unit] =
     basicRequest
       .post(uri"$responseUrl")
-      .body(response)
+      .body(asJson(response))
       .contentType("application/json")
       .send(backend)
       .void

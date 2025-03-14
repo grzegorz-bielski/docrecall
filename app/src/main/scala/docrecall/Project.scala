@@ -19,10 +19,11 @@
 
 //> using dep com.lihaoyi::scalatags::0.13.1
 
-//> using dep com.softwaremill.sttp.openai::fs2:0.2.6
-//> using dep com.softwaremill.sttp.openai::core:0.2.6
-//> using dep com.softwaremill.sttp.client4::cats:4.0.0-M19
-//> using dep com.softwaremill.sttp.client4::jsoniter:4.0.0-M19
+//> using dep com.softwaremill.sttp.openai::fs2:0.3.0
+//> using dep com.softwaremill.sttp.openai::core:0.3.0
+
+//> using dep com.softwaremill.sttp.client4::cats:4.0.0-RC1
+//> using dep com.softwaremill.sttp.client4::jsoniter:4.0.0-RC1
 
 //> using dep io.scalaland::chimney::1.7.3
 

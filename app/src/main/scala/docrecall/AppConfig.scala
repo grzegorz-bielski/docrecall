@@ -37,8 +37,10 @@ object AppConfig:
       logPath = path,
       loadFixtures = true,
       maxEntitySizeInBytes = 1073741824L, // 1GiB
-      inferenceEngine = InferenceEngine.OpenAIOllama(
-        url = "http://localhost:11434/v1",
+      inferenceEngine = InferenceEngine.OpenAIProtocolLike(
+        url = "http://localhost:11434/v1", // ollama
+        // url = "http://localhost:4000", // litellm
+        authToken = None,
       ),
       postgres = PostgresConfig(
         host = "localhost",
@@ -61,8 +63,9 @@ object EnvType:
     EnvType.values.find(_.toString.equalsIgnoreCase(str))
 
 enum InferenceEngine:
-  case OpenAIOllama(
+  case OpenAIProtocolLike(
     url: String,
+    authToken: Option[String] = None,
   )
 
 final case class PostgresConfig(

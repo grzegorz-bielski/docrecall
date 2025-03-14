@@ -13,7 +13,7 @@ app-compile:
     scala-cli compile .
 
 app-infra:
-    docker-compose -f ./docker-compose.yml up
+    docker-compose -f ./docker-compose.yml --env-file local.env up
 
 app-clean:
     scala-cli clean .
