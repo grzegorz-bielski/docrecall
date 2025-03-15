@@ -1,0 +1,1 @@
+{"LOCAL_MODEL_NAME": "deepseek-r1:1.5", "LOCAL_MODEL_BASE_URL": "http://localhost:4000", "LOCAL_MODEL_FORMAT": "json", "USE_LOCAL_MODEL": "YES", "USE_AZURE_OPENAI": "NO", "LOCAL_MODEL_API_KEY": "litellm"}

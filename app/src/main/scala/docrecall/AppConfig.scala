@@ -38,8 +38,7 @@ object AppConfig:
       loadFixtures = true,
       maxEntitySizeInBytes = 1073741824L, // 1GiB
       inferenceEngine = InferenceEngine.OpenAIProtocolLike(
-        url = "http://localhost:11434/v1", // ollama
-        // url = "http://localhost:4000", // litellm
+        url = "http://localhost:4000", // litellm
         authToken = None,
       ),
       postgres = PostgresConfig(

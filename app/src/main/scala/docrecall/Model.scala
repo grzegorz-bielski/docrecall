@@ -1,5 +1,9 @@
 package docrecall
 
+// TODO: should it be just untyped config file that depends on active inference server?
+// can we fetch it from litellm?
+// see: https://litellm-api.up.railway.app/#/
+
 /** Represents a LLM model
   *
   * @param name

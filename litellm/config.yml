@@ -1,4 +1,5 @@
 model_list:
+  # external mistral models
   - model_name: mistral-large-latest
     litellm_params: 
       model: mistral/mistral-large-latest
@@ -8,3 +9,27 @@ model_list:
     litellm_params:
       model: mistral/mistral-embed
       api_base: https://api.mistral.ai/v1
+
+  # local ollama models
+  - model_name: "deepseek-r1:1.5"      
+    litellm_params:
+      model: "ollama_chat/deepseek-r1:1.5b" # distill model       
+      api_base: "http://host.docker.internal:11434" # ollama is on host, since lack of GPU Mac virtualization
+      drop_params: true
+    model_info:
+      max_tokens: 31072 # depends on OLLAMA_CONTEXT_LENGTH
+
+  - model_name: "llama3.1" 
+    litellm_params:
+      model: "ollama_chat/llama3.1"
+      api_base: "http://host.docker.internal:11434" # ollama is on host, since lack of GPU Mac virtualization
+    model_info:
+      max_tokens: 31072 # depends on OLLAMA_CONTEXT_LENGTH
+
+  - model_name: "snowflake-arctic-embed"
+    litellm_params:
+      model: "ollama/snowflake-arctic-embed"
+      api_base: "http://host.docker.internal:11434" # ollama is on host, since lack of GPU Mac virtualization
+    model_info:
+      max_tokens: 512
+      mode: embedding
