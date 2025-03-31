@@ -4,6 +4,8 @@ from deepeval.metrics import GEval
 
 # see: https://docs.confident-ai.com/docs/evaluation-test-cases
 
+# TODO: connect to app
+
 def test_correctness():
     correctness_metric = GEval(
         name="Correctness",
