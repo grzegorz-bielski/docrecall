@@ -2,7 +2,6 @@ version: '3.8'
 name: docrecall-stack
 services:
 
-  # https://docs.paradedb.com/documentation/getting-started/quickstart
   paradedb:
     image: paradedb/paradedb:0.15.1-pg17
     ports:
@@ -15,6 +14,16 @@ services:
       - POSTGRES_DB=docrecall
     volumes:
       - paradedb_data:/var/lib/postgresql/data/
+
+  litellm:
+    image: ghcr.io/berriai/litellm:litellm_stable_release_branch-v1.61.20-stable
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./litellm/config.yml:/app/config.yaml 
+    command: [ "--config", "/app/config.yaml", "--port", "4000", "--num_workers", "8" ]
+    environment:
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY}
 
 volumes:
   paradedb_data:

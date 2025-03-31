@@ -1,3 +1,4 @@
+# scala
 target/
 .idea/
 .bloop
@@ -8,10 +9,20 @@ metals.sbt
 /project/project/
 .java-version
 .bsp/
-.env
-.DS_Store
+
+# python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv
+.pytest_cache
+.deepeval-cache.json
+
+# js
 node_modules
 
+# misc
+.DS_Store
 content
 app/src/main/resources/static/generated.css
 app/src/main/resources/static/bundle.js*
